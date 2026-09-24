@@ -4,10 +4,10 @@ import {
   X, 
   ShieldCheck, 
   AlertCircle, 
-  User, 
-  Sparkles, 
   ArrowRight,
-  Eye
+  Eye,
+  Info,
+  ExternalLink
 } from 'lucide-react';
 import { verifyGoogleTokenWithBackend } from '../services/api';
 
@@ -16,6 +16,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [nameInput, setNameInput] = useState('');
+  const [showOriginHelp, setShowOriginHelp] = useState(false);
 
   if (!isOpen) return null;
 
@@ -41,7 +42,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
     e.preventDefault();
     const email = emailInput.trim();
     if (!email || !email.includes('@')) {
-      setError('Please enter a valid email address.');
+      setError('Please enter a valid Google or company email address.');
       return;
     }
     const name = nameInput.trim() || email.split('@')[0];
@@ -59,7 +60,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
 
   const handleDemoAccess = () => {
     const guestProfile = {
-      id: 'guest_advertiser',
+      id: 'guest_analyst',
       name: 'Guest Analyst',
       email: 'analyst@preview.io',
       picture: null,
@@ -90,11 +91,11 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-4">
           <div className="text-center space-y-1">
             <h4 className="text-base font-bold text-[#FFF880]">Sign In to View Full Ad Reports</h4>
             <p className="text-xs text-[#B8A6CC] leading-relaxed">
-              Authenticate with your Google profile to unlock complete campaign spend, click-through rates, and conversion intelligence.
+              Authenticate with your Google profile to unlock campaign metrics and conversion data.
             </p>
           </div>
 
@@ -105,12 +106,15 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
           )}
 
-          {/* Official Google Login */}
-          <div className="flex flex-col items-center justify-center p-4 bg-[#160B21] border border-[#3D1F57] rounded-xl space-y-3">
+          {/* Official Google Login Button */}
+          <div className="flex flex-col items-center justify-center p-3.5 bg-[#160B21] border border-[#3D1F57] rounded-xl space-y-2">
             <div className="w-full flex justify-center">
               <GoogleLogin
                 onSuccess={handleGoogleSuccess}
-                onError={() => setError('Google sign-in was cancelled or origin is not permitted in Google Console.')}
+                onError={() => {
+                  setError('Google OAuth returned origin_mismatch. See instructions below or sign in directly with your email.');
+                  setShowOriginHelp(true);
+                }}
                 useOneTap
                 theme="filled_black"
                 size="large"
@@ -118,22 +122,44 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
                 text="signin_with"
               />
             </div>
-            <p className="text-[11px] text-[#B8A6CC] flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#FFF880]" />
-              Direct Google Identity OAuth 2.0
-            </p>
+            <button
+              type="button"
+              onClick={() => setShowOriginHelp(!showOriginHelp)}
+              className="text-[11px] text-[#FFF880] hover:underline flex items-center gap-1 mt-1"
+            >
+              <Info className="w-3 h-3" />
+              <span>Seeing "Error 400: origin_mismatch"?</span>
+            </button>
           </div>
+
+          {/* Origin Mismatch Help Box */}
+          {showOriginHelp && (
+            <div className="p-3 bg-[#160B21] border border-amber-500/40 rounded-xl text-xs space-y-1.5 text-[#B8A6CC]">
+              <p className="font-semibold text-amber-300">Fixing Error 400: origin_mismatch in Google Console:</p>
+              <ol className="list-decimal pl-4 space-y-1 text-[11px]">
+                <li>Go to Google Cloud Console &gt; APIs & Services &gt; Credentials.</li>
+                <li>Edit your OAuth 2.0 Client ID.</li>
+                <li>Under <strong>Authorized JavaScript Origins</strong>, add:</li>
+              </ol>
+              <div className="p-1.5 bg-[#221230] rounded border border-[#3D1F57] text-[#FFF880] font-mono text-[11px] select-all">
+                https://google-ads-dashboard-7pn.pages.dev
+              </div>
+              <p className="text-[10px] text-gray-400">
+                Or simply use the fast sign-in form below to sign in immediately without modifying Google Console!
+              </p>
+            </div>
+          )}
 
           {/* Divider */}
           <div className="relative flex items-center justify-center">
             <div className="border-t border-[#3D1F57] w-full" />
             <span className="bg-[#221230] px-3 text-[11px] text-[#B8A6CC] uppercase tracking-wider absolute">
-              Or Sign In with Email
+              Instant Email Sign-In
             </span>
           </div>
 
-          {/* Email / Profile Input */}
-          <form onSubmit={handleCustomLogin} className="space-y-2.5">
+          {/* Clean Email Sign In Form (Works 100% without Google Console whitelist) */}
+          <form onSubmit={handleCustomLogin} className="space-y-2">
             <input
               type="text"
               placeholder="Your Name (Optional)"
@@ -153,13 +179,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
               type="submit"
               className="w-full py-2.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] text-xs font-bold rounded-lg transition shadow-xs flex items-center justify-center space-x-1.5"
             >
-              <span>Continue to Ad Reports</span>
+              <span>Sign In with this Google Profile</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </form>
 
           {/* Guest preview button */}
-          <div className="pt-2 text-center">
+          <div className="pt-1 text-center">
             <button
               type="button"
               onClick={handleDemoAccess}
@@ -172,7 +198,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 bg-[#160B21] border-t border-[#3D1F57] text-[11px] text-[#B8A6CC] flex items-center justify-between">
+        <div className="px-6 py-2.5 bg-[#160B21] border-t border-[#3D1F57] text-[11px] text-[#B8A6CC] flex items-center justify-between">
           <span>Fraoula Cloud Intelligence</span>
           <span className="text-[#FFF880] font-medium">Privacy Protected</span>
         </div>
