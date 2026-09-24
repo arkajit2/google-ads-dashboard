@@ -1,5 +1,5 @@
-// Google Ads API client with fallback data
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Google Ads API client for Cloudflare Pages Edge Functions
+const API_URL = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : '';
 
 const FALLBACK_CAMPAIGNS = [
   {
