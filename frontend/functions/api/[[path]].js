@@ -241,6 +241,72 @@ export async function onRequest(context) {
     }
   }
 
+  // ─── AUTH / GOOGLE CODE EXCHANGE (OAuth 2.0 Auth-Code Flow) ─────────────────
+  if (path.endsWith("/api/auth/google/code") && request.method === "POST") {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const code = body.code;
+      if (!code) {
+        return jsonResponse({ error: "Missing authorization code" }, 400);
+      }
+
+      const clientId = env?.GOOGLE_CLIENT_ID || "";
+      const clientSecret = env?.GOOGLE_CLIENT_SECRET || "";
+
+      // Exchange authorization code for tokens
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code: code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: "postmessage",
+          grant_type: "authorization_code"
+        })
+      });
+
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok) {
+        return jsonResponse({
+          error: tokenData.error_description || tokenData.error || "Failed to exchange auth code",
+          details: tokenData
+        }, 400);
+      }
+
+      const accessToken = tokenData.access_token;
+
+      // Fetch user profile from userinfo endpoint
+      let userProfile = null;
+      try {
+        const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        if (userRes.ok) {
+          const u = await userRes.json();
+          userProfile = {
+            id: u.sub,
+            name: u.name,
+            email: u.email,
+            picture: u.picture
+          };
+        }
+      } catch (err) {
+        console.warn("Failed to fetch userinfo:", err);
+      }
+
+      return jsonResponse({
+        success: true,
+        access_token: accessToken,
+        refresh_token: tokenData.refresh_token || null,
+        expires_in: tokenData.expires_in,
+        user: userProfile
+      });
+    } catch (e) {
+      return jsonResponse({ error: e.message }, 500);
+    }
+  }
+
   // ─── AUTH / GOOGLE VERIFY FALLBACK ──────────────────────────────────────────
   if (path.endsWith("/api/auth/google/verify") && request.method === "POST") {
     try {

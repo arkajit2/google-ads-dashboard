@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Sparkles
 } from 'lucide-react';
-import { verifyGoogleTokenWithBackend } from '../services/api';
+import { exchangeAuthCodeForTokens } from '../services/api';
 
 export default function AuthModal({ 
   isOpen, 
@@ -18,24 +18,24 @@ export default function AuthModal({
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Popup OAuth 2.0 flow with Google Ads scope
+  // Popup OAuth 2.0 Auth-Code flow with Google Ads scope
   const popupLogin = useGoogleLogin({
+    flow: 'auth-code',
     scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-    onSuccess: async (tokenResponse) => {
+    onSuccess: async (codeResponse) => {
       setLoading(true);
       setError(null);
       try {
-        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { "Authorization": `Bearer ${tokenResponse.access_token}` }
-        });
-        if (userInfoRes.ok) {
-          const profile = await userInfoRes.json();
+        const data = await exchangeAuthCodeForTokens(codeResponse.code);
+        if (data.success && data.access_token) {
+          const profile = data.user || {};
           const googleUser = {
-            id: profile.sub,
+            id: profile.id || profile.sub,
             name: profile.name || 'Google User',
             email: profile.email || '',
             picture: profile.picture || '',
-            access_token: tokenResponse.access_token,
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
             is_live: true,
             customer_id: '',
             account_name: `${profile.name || 'Personal'}'s Google Ads`
@@ -43,17 +43,17 @@ export default function AuthModal({
           onLoginSuccess(googleUser);
           onClose();
         } else {
-          setError('Failed to fetch user profile from Google.');
+          setError(data.error || 'Failed to exchange Google authorization code.');
         }
       } catch (err) {
-        setError(err.message || 'Error fetching user profile.');
+        setError(err.message || 'Error authorizing with Google.');
       } finally {
         setLoading(false);
       }
     },
     onError: (err) => {
       console.error("Google popup error:", err);
-      setError('Google authorization popup was closed or blocked.');
+      setError('Google authorization popup was closed, blocked, or not permitted.');
     }
   });
 

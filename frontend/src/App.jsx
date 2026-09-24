@@ -9,7 +9,8 @@ import {
   fetchSummaryMetrics, 
   fetchTimeseriesData, 
   fetchCampaigns,
-  syncGoogleAdsWithEdge
+  syncGoogleAdsWithEdge,
+  exchangeAuthCodeForTokens
 } from './services/api';
 import { 
   BarChart3, 
@@ -110,39 +111,44 @@ export default function App() {
     }
   };
 
-  // Dedicated Google Ads OAuth Flow
+  // Dedicated Google Ads OAuth Flow (Auth-Code Flow)
   const authorizeGoogleAds = useGoogleLogin({
+    flow: 'auth-code',
     scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-    onSuccess: async (tokenResponse) => {
+    onSuccess: async (codeResponse) => {
       setLoading(true);
       setApiNotice(null);
       try {
-        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { "Authorization": `Bearer ${tokenResponse.access_token}` }
-        });
-        const profile = userInfoRes.ok ? await userInfoRes.json() : {};
-        const updatedUser = {
-          ...(user || {}),
-          id: profile.sub || user?.id,
-          name: profile.name || user?.name || 'Google User',
-          email: profile.email || user?.email || '',
-          picture: profile.picture || user?.picture || '',
-          access_token: tokenResponse.access_token,
-          is_live: true,
-          customer_id: customerIdInput || user?.customer_id || ''
-        };
-        setUser(updatedUser);
-        localStorage.setItem('google_ads_user', JSON.stringify(updatedUser));
-        await loadData(updatedUser, customerIdInput);
+        const data = await exchangeAuthCodeForTokens(codeResponse.code);
+        if (data.success && data.access_token) {
+          const profile = data.user || {};
+          const updatedUser = {
+            ...(user || {}),
+            id: profile.id || profile.sub || user?.id,
+            name: profile.name || user?.name || 'Google User',
+            email: profile.email || user?.email || '',
+            picture: profile.picture || user?.picture || '',
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            is_live: true,
+            customer_id: customerIdInput || user?.customer_id || ''
+          };
+          setUser(updatedUser);
+          localStorage.setItem('google_ads_user', JSON.stringify(updatedUser));
+          await loadData(updatedUser, customerIdInput);
+        } else {
+          setApiNotice({ type: 'error', text: data.error || 'Failed to exchange Google authorization code' });
+        }
       } catch (err) {
         console.error("Auth error", err);
+        setApiNotice({ type: 'error', text: err.message || 'Authorization failed' });
       } finally {
         setLoading(false);
       }
     },
     onError: (err) => {
       console.error("Google OAuth error:", err);
-      setApiNotice({ type: 'error', text: 'Google OAuth window was closed or blocked. Please allow popups.' });
+      setApiNotice({ type: 'error', text: 'Google OAuth window was closed or blocked. Ensure your Google account is added under "Test users" in Google Cloud Console.' });
     }
   });
 

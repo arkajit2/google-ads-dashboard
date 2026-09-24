@@ -76,6 +76,24 @@ export async function verifyGoogleTokenWithBackend(credential) {
   }
 }
 
+export async function exchangeAuthCodeForTokens(code) {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/google/code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || `Authentication failed (HTTP ${res.status})`);
+    }
+    return data;
+  } catch (err) {
+    console.error("Auth code exchange error", err);
+    throw err;
+  }
+}
+
 export async function syncGoogleAdsWithEdge(accessToken, customerId = '', developerToken = '') {
   try {
     const res = await fetch(`${API_URL}/api/googleads/sync`, {
