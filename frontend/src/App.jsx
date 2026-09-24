@@ -31,7 +31,12 @@ export default function App() {
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('google_ads_user');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (parsed?.customer_id === '482-910-2391') {
+        parsed.customer_id = '';
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -53,17 +58,24 @@ export default function App() {
     setLoading(true);
     try {
       if (currentUser?.is_live && currentUser?.access_token) {
-        // Fetch live from Google Ads API
+        // Fetch live from Google Ads API via Cloudflare Pages Function
         const devToken = localStorage.getItem('google_ads_dev_token') || '';
         const res = await syncGoogleAdsWithEdge(currentUser.access_token, currentUser.customer_id || '', devToken);
-        if (res && res.success) {
+        if (res) {
           setCampaigns(res.campaigns || []);
           if (res.summary) setSummary(res.summary);
+          if (res.timeseries) setTimeseries(res.timeseries || []);
+          if (res.customer_id && !currentUser.customer_id) {
+            setUser(prev => ({ ...prev, customer_id: res.customer_id }));
+          }
+          if (res.needs_developer_token) {
+            setUser(prev => ({ ...prev, needs_developer_token: true }));
+          }
           return;
         }
       }
 
-      // Default sample view for preview
+      // Default sample view for preview (0 mock numbers)
       const [sumData, tsData, cmpData] = await Promise.all([
         fetchSummaryMetrics(),
         fetchTimeseriesData(selectedDays),
@@ -86,8 +98,7 @@ export default function App() {
   const handleLoginSuccess = (profile) => {
     setUser(profile);
     localStorage.setItem('google_ads_user', JSON.stringify(profile));
-    if (profile.campaigns) setCampaigns(profile.campaigns);
-    if (profile.summary) setSummary(profile.summary);
+    loadData(profile);
   };
 
   const handleSignOut = () => {
@@ -129,7 +140,7 @@ export default function App() {
               {loading && <RefreshCw className="w-4 h-4 text-[#FFF880] animate-spin" />}
             </div>
             <p className="text-xs text-[#B8A6CC] mt-1">
-              Reporting Cycle: <span className="text-[#FFF880] font-semibold">Last 30 Days</span> • Account: {user ? (user.customer_id || user.email) : "Preview Sample"}
+              Reporting Cycle: <span className="text-[#FFF880] font-semibold">Last 30 Days</span> • Account: {user ? (user.customer_id ? `CID ${user.customer_id}` : user.email) : "Not Connected (Sample Preview)"}
             </p>
           </div>
 
@@ -143,7 +154,7 @@ export default function App() {
             ) : (
               <div className="flex items-center space-x-2 bg-[#221230] border border-[#3D1F57] px-3 py-1.5 rounded-lg text-xs">
                 <span className="w-2 h-2 rounded-full bg-[#FFF880]"></span>
-                <span className="text-[#B8A6CC]">Preview Mode (Sample Report)</span>
+                <span className="text-[#B8A6CC]">Preview Mode (Zero Mock Data)</span>
               </div>
             )}
           </div>
@@ -158,10 +169,10 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-[#FFF880]">
-                  Viewing Sample Performance Report (Not Signed In)
+                  Clean Sample Performance Report (Not Signed In)
                 </h3>
                 <p className="text-xs text-[#B8A6CC] mt-0.5 leading-relaxed">
-                  Sign in with your personal or client Google profile to load your real Google Ads account campaigns, clicks, and spend.
+                  Sign in with your Google profile to load your real Google Ads account campaigns, clicks, and live spend.
                 </p>
               </div>
             </div>
@@ -175,18 +186,44 @@ export default function App() {
           </div>
         )}
 
-        {/* Live Authenticated Banner */}
-        {user && user.needs_developer_token && (
-          <div className="p-4 rounded-xl bg-[#221230] border border-amber-500/40 flex items-start space-x-3 text-xs">
-            <Info className="w-4 h-4 text-[#FFF880] shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-semibold text-white">
-                Google Ads Account Authorized for <span className="text-[#FFF880]">{user.name}</span> ({user.email})
-              </p>
-              <p className="text-[#B8A6CC] leading-relaxed">
-                Google OAuth access token is active. To execute live production queries against Google's API servers (`googleads.googleapis.com`), Google requires a Developer Token from a Google Ads Manager (MCC) Account.
-              </p>
+        {/* Authenticated Account Bar */}
+        {user && (
+          <div className="p-3.5 rounded-xl bg-[#221230] border border-[#3D1F57] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-[#B8A6CC] font-medium">Customer ID:</span>
+                <input
+                  type="text"
+                  placeholder="e.g. 123-456-7890"
+                  defaultValue={user.customer_id || ''}
+                  onBlur={(e) => {
+                    const cid = e.target.value.trim();
+                    const updated = { ...user, customer_id: cid };
+                    setUser(updated);
+                    localStorage.setItem('google_ads_user', JSON.stringify(updated));
+                    loadData(updated);
+                  }}
+                  className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[#B8A6CC] font-medium">Developer Token:</span>
+                <input
+                  type="password"
+                  placeholder="Optional MCC Token"
+                  defaultValue={localStorage.getItem('google_ads_dev_token') || ''}
+                  onChange={(e) => localStorage.setItem('google_ads_dev_token', e.target.value.trim())}
+                  className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-44"
+                />
+              </div>
             </div>
+            <button
+              onClick={() => loadData(user)}
+              className="px-3.5 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-[0_0_10px_rgba(255,248,128,0.2)]"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Sync Live Ads</span>
+            </button>
           </div>
         )}
 

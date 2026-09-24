@@ -75,12 +75,9 @@ export async function onRequest(context) {
           success: true,
           is_live: false,
           needs_developer_token: true,
-          user: userProfile || {
-            name: "Authenticated User",
-            email: "user@gmail.com"
-          },
+          user: userProfile,
           message: "Google OAuth connected successfully. To fetch live campaigns directly from Google Ads API, a Google Ads Developer Token is required.",
-          account_id: customerId || "Not specified",
+          account_id: customerId || "",
           campaigns: [],
           summary: {
             cost: { value: 0, formatted: "$0.00", change_pct: 0 },
@@ -268,10 +265,10 @@ export async function onRequest(context) {
           user: {
             id: info.sub,
             name: info.name || "Google User",
-            email: info.email,
-            picture: info.picture,
-            account_id: env?.GOOGLE_ADS_CUSTOMER_ID || "482-910-2391",
-            account_name: `${info.name || 'Personal'}'s Google Ads`
+            email: info.email || "",
+            picture: info.picture || "",
+            account_id: env?.GOOGLE_ADS_CUSTOMER_ID || "",
+            account_name: `${info.name || 'Google'}'s Ads Account`
           }
         });
       }
@@ -285,11 +282,11 @@ export async function onRequest(context) {
         return jsonResponse({
           success: true,
           user: {
-            id: payload.sub || "usr_google_1",
-            name: payload.name || "Google Advertiser",
-            email: payload.email || "user@gmail.com",
-            picture: payload.picture || "https://lh3.googleusercontent.com/a/default-user",
-            account_id: env?.GOOGLE_ADS_CUSTOMER_ID || "482-910-2391",
+            id: payload.sub || "",
+            name: payload.name || "Google User",
+            email: payload.email || "",
+            picture: payload.picture || "",
+            account_id: env?.GOOGLE_ADS_CUSTOMER_ID || "",
             account_name: `${payload.name || 'Google'}'s Ads Account`
           }
         });

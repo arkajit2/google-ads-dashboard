@@ -126,8 +126,9 @@ export default function CampaignsTable({ campaigns, onRefresh }) {
           <tbody className="divide-y divide-[#3D1F57]">
             {filteredCampaigns.length === 0 ? (
               <tr>
-                <td colSpan="10" className="py-8 text-center text-[#B8A6CC]">
-                  No campaigns found matching filter.
+                <td colSpan="10" className="py-12 text-center text-[#B8A6CC] space-y-1">
+                  <p className="font-semibold text-white">No active Google Ads campaigns found for this account.</p>
+                  <p className="text-[11px] text-[#B8A6CC]">Real campaigns, spend, clicks, and metrics will stream here once active.</p>
                 </td>
               </tr>
             ) : (

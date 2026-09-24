@@ -110,33 +110,29 @@ export default function PerformanceChart({
       </div>
 
       {/* Chart Canvas */}
-      <div className="h-64 sm:h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3D1F57" opacity={0.6} />
-            <XAxis 
-              dataKey="date" 
-              tick={{ fontSize: 11, fill: '#B8A6CC' }} 
-              axisLine={{ stroke: '#3D1F57' }}
-              tickLine={false}
-            />
-            {/* Primary Y Axis (Left - Fraoula Yellow) */}
-            <YAxis
-              yAxisId="left"
-              tick={{ fontSize: 11, fill: '#FFF880' }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v) => {
-                if (v >= 1000) return `${(v / 1000).toFixed(0)}k`;
-                return v;
-              }}
-            />
-            {/* Secondary Y Axis (Right - Violet) */}
-            {secondaryMetric !== 'none' && (
+      <div className="h-64 sm:h-72 w-full flex items-center justify-center">
+        {(!data || data.length === 0) ? (
+          <div className="text-center p-6 space-y-2">
+            <div className="w-10 h-10 mx-auto rounded-full bg-[#160B21] border border-[#3D1F57] flex items-center justify-center text-[#B8A6CC]">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FFF880]/60"></span>
+            </div>
+            <p className="text-xs text-[#B8A6CC] font-medium">No performance timeseries data recorded for the selected period.</p>
+            <p className="text-[11px] text-[#B8A6CC]/60">Historical daily clicks and impressions will display here as campaigns run.</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3D1F57" opacity={0.6} />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fontSize: 11, fill: '#B8A6CC' }} 
+                axisLine={{ stroke: '#3D1F57' }}
+                tickLine={false}
+              />
+              {/* Primary Y Axis (Left - Fraoula Yellow) */}
               <YAxis
-                yAxisId="right"
-                orientation="right"
-                tick={{ fontSize: 11, fill: '#9D4EDD' }}
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: '#FFF880' }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => {
@@ -144,37 +140,51 @@ export default function PerformanceChart({
                   return v;
                 }}
               />
-            )}
-            <Tooltip content={<CustomTooltip />} />
-            
-            {/* Primary Line - Fraoula Yellow */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey={primaryMetric}
-              name={primaryMeta.label}
-              stroke="#FFF880"
-              strokeWidth={2.5}
-              dot={{ r: 2, fill: '#FFF880' }}
-              activeDot={{ r: 5, fill: '#FFF880', stroke: '#160B21', strokeWidth: 2 }}
-            />
-
-            {/* Secondary Line - Violet */}
-            {secondaryMetric !== 'none' && (
+              {/* Secondary Y Axis (Right - Violet) */}
+              {secondaryMetric !== 'none' && (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11, fill: '#9D4EDD' }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => {
+                    if (v >= 1000) return `${(v / 1000).toFixed(0)}k`;
+                    return v;
+                  }}
+                />
+              )}
+              <Tooltip content={<CustomTooltip />} />
+              
+              {/* Primary Line - Fraoula Yellow */}
               <Line
-                yAxisId="right"
+                yAxisId="left"
                 type="monotone"
-                dataKey={secondaryMetric}
-                name={secondaryMeta.label}
-                stroke="#9D4EDD"
-                strokeWidth={2}
-                strokeDasharray="4 4"
-                dot={{ r: 2, fill: '#9D4EDD' }}
-                activeDot={{ r: 5, fill: '#9D4EDD', stroke: '#160B21', strokeWidth: 2 }}
+                dataKey={primaryMetric}
+                name={primaryMeta.label}
+                stroke="#FFF880"
+                strokeWidth={2.5}
+                dot={{ r: 2, fill: '#FFF880' }}
+                activeDot={{ r: 5, fill: '#FFF880', stroke: '#160B21', strokeWidth: 2 }}
               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+
+              {/* Secondary Line - Violet */}
+              {secondaryMetric !== 'none' && (
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey={secondaryMetric}
+                  name={secondaryMeta.label}
+                  stroke="#9D4EDD"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={{ r: 2, fill: '#9D4EDD' }}
+                  activeDot={{ r: 5, fill: '#9D4EDD', stroke: '#160B21', strokeWidth: 2 }}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

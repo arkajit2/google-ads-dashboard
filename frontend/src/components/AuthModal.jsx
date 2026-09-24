@@ -18,8 +18,9 @@ export default function AuthModal({
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Popup token flow login (fallback if GIS iframe is blocked by ad blocker)
+  // Popup OAuth 2.0 flow with Google Ads scope
   const popupLogin = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
     onSuccess: async (tokenResponse) => {
       setLoading(true);
       setError(null);
@@ -32,10 +33,11 @@ export default function AuthModal({
           const googleUser = {
             id: profile.sub,
             name: profile.name || 'Google User',
-            email: profile.email,
-            picture: profile.picture,
+            email: profile.email || '',
+            picture: profile.picture || '',
+            access_token: tokenResponse.access_token,
             is_live: true,
-            customer_id: '482-910-2391',
+            customer_id: '',
             account_name: `${profile.name || 'Personal'}'s Google Ads`
           };
           onLoginSuccess(googleUser);
@@ -81,11 +83,11 @@ export default function AuthModal({
             googleUser = {
               id: decoded.sub,
               name: decoded.name || 'Google User',
-              email: decoded.email,
-              picture: decoded.picture,
+              email: decoded.email || '',
+              picture: decoded.picture || '',
               is_live: true,
-              customer_id: '482-910-2391',
-              account_name: `${decoded.name || 'Google'}'s Ad Account`
+              customer_id: '',
+              account_name: `${decoded.name || 'Google'}'s Ads Account`
             };
           }
         } catch (e) {
@@ -152,35 +154,13 @@ export default function AuthModal({
             </div>
           )}
 
-          {/* Primary Official Google Login Button */}
-          <div className="flex flex-col items-center justify-center p-5 bg-[#160B21] border border-[#3D1F57] rounded-xl space-y-3">
-            <div className="w-full flex justify-center">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => {
-                  setError('Google Identity button encountered an error. Click the direct Google popup button below.');
-                }}
-                useOneTap
-                theme="filled_black"
-                size="large"
-                shape="pill"
-                text="signin_with"
-                width="320"
-              />
-            </div>
-            <p className="text-[11px] text-[#B8A6CC] flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#FFF880]" />
-              Official Google Identity Services
-            </p>
-          </div>
-
-          {/* Secondary Direct Google Popup Option */}
-          <div className="pt-1">
+          {/* Primary Google Ads OAuth Button */}
+          <div className="space-y-3">
             <button
               type="button"
               onClick={() => popupLogin()}
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-[#2D1840] hover:bg-[#3D1B4F] border border-[#3D1F57] text-white rounded-lg font-semibold text-xs transition flex items-center justify-center space-x-2 cursor-pointer"
+              className="w-full py-3 px-4 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] rounded-xl font-bold text-sm transition flex items-center justify-center space-x-2.5 cursor-pointer shadow-[0_0_20px_rgba(255,248,128,0.25)]"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -188,8 +168,34 @@ export default function AuthModal({
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
-              <span>{loading ? 'Authenticating with Google...' : 'Or Open Google Popup Window'}</span>
+              <span>{loading ? 'Connecting with Google...' : 'Sign In with Google (Live Ads)'}</span>
             </button>
+            <p className="text-[11px] text-center text-[#B8A6CC] flex items-center justify-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#FFF880]" />
+              Requests official Google Ads read permissions
+            </p>
+          </div>
+
+          <div className="flex items-center my-3">
+            <div className="flex-1 border-t border-[#3D1F57]"></div>
+            <span className="px-3 text-[11px] text-[#B8A6CC]/60 uppercase tracking-wider">or fast identity</span>
+            <div className="flex-1 border-t border-[#3D1F57]"></div>
+          </div>
+
+          {/* Secondary GIS One-Tap / Button */}
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => {
+                setError('Google Identity button encountered an error.');
+              }}
+              useOneTap
+              theme="filled_black"
+              size="large"
+              shape="pill"
+              text="signin_with"
+              width="300"
+            />
           </div>
         </div>
 
