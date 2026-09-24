@@ -4,5 +4,5 @@ pages_build_output_dir = "./dist"
 
 [vars]
 ENVIRONMENT = "production"
-GOOGLE_CLIENT_ID = "456268738355-0602flbh7phl8bjra2k8n3gk26qnd0nq.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = "594825739440-1cmpg8el1f1h8pui26kuquo69dtf4698.apps.googleusercontent.com"
 GOOGLE_ADS_CUSTOMER_ID = "482-910-2391"
