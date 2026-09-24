@@ -12,6 +12,25 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+// Google Ads API version fallback helper (handles annual deprecations e.g. v25, v24, v23)
+async function fetchGoogleAdsWithVersionFallback(endpointPath, options) {
+  const versions = ["v25", "v24", "v23", "v22"];
+  let lastRes = null;
+  for (const v of versions) {
+    const url = `https://googleads.googleapis.com/${v}/${endpointPath}`;
+    try {
+      const res = await fetch(url, options);
+      if (res.status !== 404) {
+        return { res, version: v };
+      }
+      lastRes = res;
+    } catch (e) {
+      console.warn(`Fetch error for version ${v}:`, e);
+    }
+  }
+  return { res: lastRes, version: versions[0] };
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -82,16 +101,16 @@ export async function onRequest(context) {
       let accessibleCustomers = [];
       let listAccountsError = null;
       try {
-        const custRes = await fetch("https://googleads.googleapis.com/v18/customers:listAccessibleCustomers", {
+        const { res: custRes, version: matchedVersion } = await fetchGoogleAdsWithVersionFallback("customers:listAccessibleCustomers", {
           headers: googleAdsHeaders
         });
-        if (custRes.ok) {
+        if (custRes && custRes.ok) {
           const custData = await custRes.json();
           accessibleCustomers = (custData.resourceNames || []).map(r => r.replace("customers/", ""));
           if (!customerId && accessibleCustomers.length > 0) {
             customerId = accessibleCustomers[0];
           }
-        } else {
+        } else if (custRes) {
           const errData = await custRes.json().catch(() => ({}));
           listAccountsError = errData?.error?.message || `Google Ads HTTP ${custRes.status}`;
           console.warn("listAccessibleCustomers failed:", custRes.status, errData);
@@ -140,16 +159,15 @@ export async function onRequest(context) {
         WHERE segments.date DURING LAST_30_DAYS
       `;
 
-      const adsApiUrl = `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:searchStream`;
-      const searchRes = await fetch(adsApiUrl, {
+      const { res: searchRes } = await fetchGoogleAdsWithVersionFallback(`customers/${customerId}/googleAds:searchStream`, {
         method: "POST",
         headers: googleAdsHeaders,
         body: JSON.stringify({ query: gaqlQuery })
       });
 
-      if (!searchRes.ok) {
-        const errorJson = await searchRes.json().catch(() => ({}));
-        const apiErrorMessage = errorJson?.error?.message || `Google Ads API HTTP ${searchRes.status}`;
+      if (!searchRes || !searchRes.ok) {
+        const errorJson = searchRes ? await searchRes.json().catch(() => ({})) : {};
+        const apiErrorMessage = errorJson?.error?.message || `Google Ads API HTTP ${searchRes ? searchRes.status : 'Unavailable'}`;
         return jsonResponse({
           success: false,
           is_live: true,
