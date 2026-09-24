@@ -86,7 +86,13 @@ export default function App() {
           if (res.campaigns) setCampaigns(res.campaigns);
           if (res.summary) setSummary(res.summary);
           if (res.timeseries && res.timeseries.length > 0) setTimeseries(res.timeseries);
-          if (res.message) {
+          if (res.is_expired || res.error?.includes('expired') || res.message?.includes('expired') || res.error?.includes('authentication credentials') || res.message?.includes('authentication credentials')) {
+            setApiNotice({ 
+              type: 'warning', 
+              is_expired: true, 
+              text: 'Your Google Ads authorization has expired. Click "Reconnect Google Ads" to refresh your session.' 
+            });
+          } else if (res.message) {
             setApiNotice({ type: 'info', text: res.message });
           } else if (res.error) {
             setApiNotice({ type: 'error', text: res.error });
@@ -99,7 +105,8 @@ export default function App() {
       if (currentUser && !currentUser.access_token) {
         setApiNotice({
           type: 'warning',
-          text: 'Google Ads access token required to query live account data. Click "Authorize Google Ads Access" to auto-populate your Customer ID.'
+          is_expired: true,
+          text: 'Google Ads access authorization required. Click "Reconnect Google Ads" to auto-fetch your accounts.'
         });
       }
 
@@ -120,9 +127,10 @@ export default function App() {
     }
   };
 
-  // Dedicated Google Ads OAuth Flow (Auth-Code Flow)
+  // Dedicated Google Ads OAuth Flow (Auth-Code Flow with consent prompt for fresh refresh token)
   const authorizeGoogleAds = useGoogleLogin({
     flow: 'auth-code',
+    prompt: 'consent',
     scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
     onSuccess: async (codeResponse) => {
       setLoading(true);
@@ -348,12 +356,13 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {!user.access_token && apiNotice.type === 'warning' && (
+                {(!user.access_token || apiNotice.is_expired || apiNotice.type === 'warning') && (
                   <button
                     onClick={() => authorizeGoogleAds()}
-                    className="ml-2 px-3 py-1 bg-[#FFF880] text-[#160B21] font-bold rounded-lg text-xs shrink-0 cursor-pointer"
+                    className="ml-3 px-3.5 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs shrink-0 cursor-pointer transition shadow-[0_0_12px_rgba(255,248,128,0.25)] flex items-center space-x-1.5"
                   >
-                    Authorize Now
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Reconnect Google Ads</span>
                   </button>
                 )}
               </div>

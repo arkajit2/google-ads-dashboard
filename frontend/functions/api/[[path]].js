@@ -47,6 +47,9 @@ function parseGoogleAdsError(data, fallbackStatus, customerId = '') {
   }
 
   if (errorObj.message) {
+    if (errorObj.message.includes('invalid authentication credentials') || errorObj.message.includes('Expected OAuth 2 access token')) {
+      return 'Your Google session has expired. Click "Reconnect Google Ads" to re-authenticate.';
+    }
     if (errorObj.message.includes('has not been used in project') || errorObj.message.includes('it is disabled')) {
       return 'Google Ads API has not been enabled in Google Cloud project core-period-509604-u4. Go to Google Cloud Console > APIs & Services > Library to enable it.';
     }

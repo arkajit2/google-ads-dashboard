@@ -21,6 +21,7 @@ export default function AuthModal({
   // Popup OAuth 2.0 Auth-Code flow with Google Ads scope
   const popupLogin = useGoogleLogin({
     flow: 'auth-code',
+    prompt: 'consent',
     scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
     onSuccess: async (codeResponse) => {
       setLoading(true);
