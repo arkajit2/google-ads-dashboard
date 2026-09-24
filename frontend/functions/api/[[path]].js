@@ -69,15 +69,47 @@ export async function onRequest(context) {
         console.warn("Failed to fetch userinfo:", err);
       }
 
-      // If no developer token is provided yet
-      if (!developerToken) {
+      // Step 2: Build Google Ads API headers
+      const googleAdsHeaders = {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      };
+      if (developerToken) {
+        googleAdsHeaders["developer-token"] = developerToken;
+      }
+
+      // Step 3: Query accessible Google Ads customers if customerId is not yet selected
+      let accessibleCustomers = [];
+      let listAccountsError = null;
+      try {
+        const custRes = await fetch("https://googleads.googleapis.com/v18/customers:listAccessibleCustomers", {
+          headers: googleAdsHeaders
+        });
+        if (custRes.ok) {
+          const custData = await custRes.json();
+          accessibleCustomers = (custData.resourceNames || []).map(r => r.replace("customers/", ""));
+          if (!customerId && accessibleCustomers.length > 0) {
+            customerId = accessibleCustomers[0];
+          }
+        } else {
+          const errData = await custRes.json().catch(() => ({}));
+          listAccountsError = errData?.error?.message || `Google Ads HTTP ${custRes.status}`;
+          console.warn("listAccessibleCustomers failed:", custRes.status, errData);
+        }
+      } catch (e) {
+        console.warn("Accessible customers query error:", e);
+        listAccountsError = e.message;
+      }
+
+      // If still no customer ID found or entered
+      if (!customerId) {
         return jsonResponse({
           success: true,
-          is_live: false,
-          needs_developer_token: true,
+          is_live: true,
           user: userProfile,
-          message: "Google OAuth connected successfully. To fetch live campaigns directly from Google Ads API, a Google Ads Developer Token is required.",
-          account_id: customerId || "",
+          accessible_customers: accessibleCustomers,
+          customer_id: "",
+          message: listAccountsError || "No accessible Google Ads accounts found for this Google email. Enter your Customer ID (e.g. 123-456-7890) above.",
           campaigns: [],
           summary: {
             cost: { value: 0, formatted: "$0.00", change_pct: 0 },
@@ -91,50 +123,7 @@ export async function onRequest(context) {
         });
       }
 
-      // Step 2: Query accessible Google Ads customers if customerId is not yet selected
-      let accessibleCustomers = [];
-      try {
-        const custRes = await fetch("https://googleads.googleapis.com/v18/customers:listAccessibleCustomers", {
-          headers: {
-            "Authorization": `Bearer ${accessToken}`,
-            "developer-token": developerToken
-          }
-        });
-        if (custRes.ok) {
-          const custData = await custRes.json();
-          accessibleCustomers = (custData.resourceNames || []).map(r => r.replace("customers/", ""));
-          if (!customerId && accessibleCustomers.length > 0) {
-            customerId = accessibleCustomers[0];
-          }
-        } else {
-          const errData = await custRes.json().catch(() => ({}));
-          console.warn("listAccessibleCustomers failed:", errData);
-        }
-      } catch (e) {
-        console.warn("Accessible customers query error:", e);
-      }
-
-      if (!customerId) {
-        return jsonResponse({
-          success: true,
-          is_live: true,
-          user: userProfile,
-          accessible_customers: accessibleCustomers,
-          message: "No accessible Google Ads customer accounts found for this Google login.",
-          campaigns: [],
-          summary: {
-            cost: { value: 0, formatted: "$0.00" },
-            impressions: { value: 0, formatted: "0" },
-            clicks: { value: 0, formatted: "0" },
-            conversions: { value: 0, formatted: "0" },
-            ctr: { value: 0, formatted: "0.00%" },
-            avg_cpc: { value: 0, formatted: "$0.00" }
-          },
-          timeseries: []
-        });
-      }
-
-      // Step 3: Run GAQL Query to get real campaign performance data
+      // Step 4: Run GAQL Query to get real campaign performance data
       const gaqlQuery = `
         SELECT 
           campaign.id, 
@@ -154,11 +143,7 @@ export async function onRequest(context) {
       const adsApiUrl = `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:searchStream`;
       const searchRes = await fetch(adsApiUrl, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "developer-token": developerToken,
-          "Content-Type": "application/json"
-        },
+        headers: googleAdsHeaders,
         body: JSON.stringify({ query: gaqlQuery })
       });
 
@@ -172,8 +157,18 @@ export async function onRequest(context) {
           error: apiErrorMessage,
           customer_id: customerId,
           accessible_customers: accessibleCustomers,
-          details: errorJson
-        }, 400);
+          details: errorJson,
+          campaigns: [],
+          summary: {
+            cost: { value: 0, formatted: "$0.00", change_pct: 0 },
+            impressions: { value: 0, formatted: "0", change_pct: 0 },
+            clicks: { value: 0, formatted: "0", change_pct: 0 },
+            conversions: { value: 0, formatted: "0", change_pct: 0 },
+            ctr: { value: 0, formatted: "0.00%", change_pct: 0 },
+            avg_cpc: { value: 0, formatted: "$0.00", change_pct: 0 }
+          },
+          timeseries: []
+        });
       }
 
       // Step 4: Parse searchStream results

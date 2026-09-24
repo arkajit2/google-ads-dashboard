@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useGoogleLogin } from '@react-oauth/google';
 import Navbar from './components/Navbar';
 import MetricCards from './components/MetricCards';
 import PerformanceChart from './components/PerformanceChart';
@@ -42,6 +43,10 @@ export default function App() {
     }
   });
 
+  // Customer ID input state
+  const [customerIdInput, setCustomerIdInput] = useState(user?.customer_id || '');
+  const [apiNotice, setApiNotice] = useState(null);
+
   // Dashboard Data State
   const [summary, setSummary] = useState(null);
   const [timeseries, setTimeseries] = useState([]);
@@ -54,25 +59,38 @@ export default function App() {
   const [secondaryMetric, setSecondaryMetric] = useState('impressions');
 
   // Load Data
-  const loadData = async (currentUser = user) => {
+  const loadData = async (currentUser = user, explicitCid = customerIdInput) => {
     setLoading(true);
+    setApiNotice(null);
     try {
       if (currentUser?.is_live && currentUser?.access_token) {
         // Fetch live from Google Ads API via Cloudflare Pages Function
         const devToken = localStorage.getItem('google_ads_dev_token') || '';
-        const res = await syncGoogleAdsWithEdge(currentUser.access_token, currentUser.customer_id || '', devToken);
+        const cidToUse = (explicitCid !== undefined && explicitCid !== '') ? explicitCid : (currentUser.customer_id || '');
+        const res = await syncGoogleAdsWithEdge(currentUser.access_token, cidToUse, devToken);
         if (res) {
-          setCampaigns(res.campaigns || []);
-          if (res.summary) setSummary(res.summary);
-          if (res.timeseries) setTimeseries(res.timeseries || []);
-          if (res.customer_id && !currentUser.customer_id) {
+          if (res.customer_id) {
+            setCustomerIdInput(res.customer_id);
             setUser(prev => ({ ...prev, customer_id: res.customer_id }));
           }
-          if (res.needs_developer_token) {
-            setUser(prev => ({ ...prev, needs_developer_token: true }));
+          if (res.campaigns) setCampaigns(res.campaigns);
+          if (res.summary) setSummary(res.summary);
+          if (res.timeseries) setTimeseries(res.timeseries);
+          if (res.message) {
+            setApiNotice({ type: 'info', text: res.message });
+          } else if (res.error) {
+            setApiNotice({ type: 'error', text: res.error });
           }
           return;
         }
+      }
+
+      // If user is logged in but doesn't have an access token yet
+      if (currentUser && !currentUser.access_token) {
+        setApiNotice({
+          type: 'warning',
+          text: 'Google Ads access token required to query live account data. Click "Authorize Google Ads Access" to auto-populate your Customer ID.'
+        });
       }
 
       // Default sample view for preview (0 mock numbers)
@@ -86,19 +104,57 @@ export default function App() {
       setCampaigns(cmpData);
     } catch (err) {
       console.error("Failed to load reporting data", err);
+      setApiNotice({ type: 'error', text: err.message || 'Network request failed' });
     } finally {
       setLoading(false);
     }
   };
 
+  // Dedicated Google Ads OAuth Flow
+  const authorizeGoogleAds = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setApiNotice(null);
+      try {
+        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { "Authorization": `Bearer ${tokenResponse.access_token}` }
+        });
+        const profile = userInfoRes.ok ? await userInfoRes.json() : {};
+        const updatedUser = {
+          ...(user || {}),
+          id: profile.sub || user?.id,
+          name: profile.name || user?.name || 'Google User',
+          email: profile.email || user?.email || '',
+          picture: profile.picture || user?.picture || '',
+          access_token: tokenResponse.access_token,
+          is_live: true,
+          customer_id: customerIdInput || user?.customer_id || ''
+        };
+        setUser(updatedUser);
+        localStorage.setItem('google_ads_user', JSON.stringify(updatedUser));
+        await loadData(updatedUser, customerIdInput);
+      } catch (err) {
+        console.error("Auth error", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (err) => {
+      console.error("Google OAuth error:", err);
+      setApiNotice({ type: 'error', text: 'Google OAuth window was closed or blocked. Please allow popups.' });
+    }
+  });
+
   useEffect(() => {
     loadData(user);
-  }, [user, selectedDays]);
+  }, [user?.access_token, selectedDays]);
 
   const handleLoginSuccess = (profile) => {
     setUser(profile);
     localStorage.setItem('google_ads_user', JSON.stringify(profile));
-    loadData(profile);
+    if (profile.customer_id) setCustomerIdInput(profile.customer_id);
+    loadData(profile, profile.customer_id || customerIdInput);
   };
 
   const handleSignOut = () => {
@@ -188,42 +244,87 @@ export default function App() {
 
         {/* Authenticated Account Bar */}
         {user && (
-          <div className="p-3.5 rounded-xl bg-[#221230] border border-[#3D1F57] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-[#B8A6CC] font-medium">Customer ID:</span>
-                <input
-                  type="text"
-                  placeholder="e.g. 123-456-7890"
-                  defaultValue={user.customer_id || ''}
-                  onBlur={(e) => {
-                    const cid = e.target.value.trim();
-                    const updated = { ...user, customer_id: cid };
-                    setUser(updated);
-                    localStorage.setItem('google_ads_user', JSON.stringify(updated));
-                    loadData(updated);
-                  }}
-                  className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36"
-                />
+          <div className="space-y-2">
+            <div className="p-3.5 rounded-xl bg-[#221230] border border-[#3D1F57] flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[#B8A6CC] font-medium">Customer ID:</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. 123-456-7890"
+                    value={customerIdInput}
+                    onChange={(e) => setCustomerIdInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') loadData(user, customerIdInput);
+                    }}
+                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36 font-mono"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[#B8A6CC] font-medium">Developer Token:</span>
+                  <input
+                    type="password"
+                    placeholder="Optional MCC Token"
+                    defaultValue={localStorage.getItem('google_ads_dev_token') || ''}
+                    onChange={(e) => localStorage.setItem('google_ads_dev_token', e.target.value.trim())}
+                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-44 font-mono"
+                  />
+                </div>
               </div>
+
               <div className="flex items-center space-x-2">
-                <span className="text-[#B8A6CC] font-medium">Developer Token:</span>
-                <input
-                  type="password"
-                  placeholder="Optional MCC Token"
-                  defaultValue={localStorage.getItem('google_ads_dev_token') || ''}
-                  onChange={(e) => localStorage.setItem('google_ads_dev_token', e.target.value.trim())}
-                  className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-44"
-                />
+                {!user.access_token && (
+                  <button
+                    onClick={() => authorizeGoogleAds()}
+                    className="px-3 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-[0_0_12px_rgba(255,248,128,0.25)]"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Authorize Google Ads Access</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => loadData(user, customerIdInput)}
+                  disabled={loading}
+                  className="px-3.5 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-[0_0_10px_rgba(255,248,128,0.2)]"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Sync Live Ads</span>
+                </button>
               </div>
             </div>
-            <button
-              onClick={() => loadData(user)}
-              className="px-3.5 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-[0_0_10px_rgba(255,248,128,0.2)]"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Sync Live Ads</span>
-            </button>
+
+            {/* API Notice / Error Banner */}
+            {apiNotice && (
+              <div className={`p-3 rounded-xl border text-xs flex items-start space-x-2.5 ${
+                apiNotice.type === 'error'
+                  ? 'bg-rose-950/60 border-rose-800 text-rose-200'
+                  : apiNotice.type === 'warning'
+                  ? 'bg-amber-950/60 border-amber-600/40 text-amber-200'
+                  : 'bg-[#221230] border-[#3D1F57] text-[#B8A6CC]'
+              }`}>
+                {apiNotice.type === 'error' ? (
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                ) : apiNotice.type === 'warning' ? (
+                  <Info className="w-4 h-4 shrink-0 mt-0.5 text-[#FFF880]" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                )}
+                <div className="flex-1">
+                  <p className="font-semibold text-white">
+                    {apiNotice.type === 'error' ? 'Google Ads API Status' : 'Account Notice'}
+                  </p>
+                  <p className="text-[11px] mt-0.5 leading-relaxed">{apiNotice.text}</p>
+                </div>
+                {!user.access_token && apiNotice.type === 'warning' && (
+                  <button
+                    onClick={() => authorizeGoogleAds()}
+                    className="ml-2 px-2.5 py-1 bg-[#FFF880] text-[#160B21] font-bold rounded text-[11px] shrink-0 cursor-pointer"
+                  >
+                    Authorize Now
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 

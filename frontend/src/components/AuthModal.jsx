@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GoogleLogin, useGoogleLogin } from '@react-oauth/google';
+import { useGoogleLogin } from '@react-oauth/google';
 import { 
   X, 
   ShieldCheck, 
@@ -155,12 +155,12 @@ export default function AuthModal({
           )}
 
           {/* Primary Google Ads OAuth Button */}
-          <div className="space-y-3">
+          <div className="space-y-3 pt-2">
             <button
               type="button"
               onClick={() => popupLogin()}
               disabled={loading}
-              className="w-full py-3 px-4 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] rounded-xl font-bold text-sm transition flex items-center justify-center space-x-2.5 cursor-pointer shadow-[0_0_20px_rgba(255,248,128,0.25)]"
+              className="w-full py-3.5 px-4 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] rounded-xl font-bold text-sm transition flex items-center justify-center space-x-2.5 cursor-pointer shadow-[0_0_20px_rgba(255,248,128,0.25)]"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -172,30 +172,8 @@ export default function AuthModal({
             </button>
             <p className="text-[11px] text-center text-[#B8A6CC] flex items-center justify-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-[#FFF880]" />
-              Requests official Google Ads read permissions
+              Requests official Google Ads permissions to view your account
             </p>
-          </div>
-
-          <div className="flex items-center my-3">
-            <div className="flex-1 border-t border-[#3D1F57]"></div>
-            <span className="px-3 text-[11px] text-[#B8A6CC]/60 uppercase tracking-wider">or fast identity</span>
-            <div className="flex-1 border-t border-[#3D1F57]"></div>
-          </div>
-
-          {/* Secondary GIS One-Tap / Button */}
-          <div className="flex justify-center">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={() => {
-                setError('Google Identity button encountered an error.');
-              }}
-              useOneTap
-              theme="filled_black"
-              size="large"
-              shape="pill"
-              text="signin_with"
-              width="300"
-            />
           </div>
         </div>
 
