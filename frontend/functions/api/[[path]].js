@@ -1,111 +1,4 @@
-// Cloudflare Pages Functions - Native Google Ads API backend (100% inside Cloudflare Ecosystem)
-
-const DEFAULT_CAMPAIGNS = [
-  {
-    id: "cmp_101",
-    name: "Search - High Intent Brand Terms",
-    type: "Search",
-    status: "ENABLED",
-    budget: 125.00,
-    bidding_strategy: "Maximize conversions (Target CPA $14.50)",
-    impressions: 48290,
-    clicks: 4320,
-    ctr: 8.95,
-    avg_cpc: 1.42,
-    cost: 6134.40,
-    conversions: 422.0,
-    cost_per_conv: 14.53,
-    conv_rate: 9.77,
-    opt_score: 94.2
-  },
-  {
-    id: "cmp_102",
-    name: "Performance Max - Global Q3 Push",
-    type: "Performance Max",
-    status: "ENABLED",
-    budget: 250.00,
-    bidding_strategy: "Maximize conversion value (Target ROAS 380%)",
-    impressions: 194800,
-    clicks: 9840,
-    ctr: 5.05,
-    avg_cpc: 1.15,
-    cost: 11316.00,
-    conversions: 612.0,
-    cost_per_conv: 18.49,
-    conv_rate: 6.22,
-    opt_score: 88.5
-  },
-  {
-    id: "cmp_103",
-    name: "Search - Non-Brand Core Solutions",
-    type: "Search",
-    status: "ENABLED",
-    budget: 180.00,
-    bidding_strategy: "Target CPA ($22.00)",
-    impressions: 92400,
-    clicks: 5120,
-    ctr: 5.54,
-    avg_cpc: 2.10,
-    cost: 10752.00,
-    conversions: 489.0,
-    cost_per_conv: 21.98,
-    conv_rate: 9.55,
-    opt_score: 82.1
-  },
-  {
-    id: "cmp_104",
-    name: "Display - Remarketing Dynamic Audience",
-    type: "Display",
-    status: "PAUSED",
-    budget: 50.00,
-    bidding_strategy: "Maximize clicks",
-    impressions: 312000,
-    clicks: 2840,
-    ctr: 0.91,
-    avg_cpc: 0.44,
-    cost: 1249.60,
-    conversions: 58.0,
-    cost_per_conv: 21.54,
-    conv_rate: 2.04,
-    opt_score: 75.0
-  },
-  {
-    id: "cmp_105",
-    name: "YouTube - In-Stream Product Overview",
-    type: "Video",
-    status: "ENABLED",
-    budget: 85.00,
-    bidding_strategy: "Target CPV ($0.06)",
-    impressions: 164000,
-    clicks: 3410,
-    ctr: 2.08,
-    avg_cpc: 0.88,
-    cost: 3000.80,
-    conversions: 114.0,
-    cost_per_conv: 26.32,
-    conv_rate: 3.34,
-    opt_score: 91.0
-  },
-  {
-    id: "cmp_106",
-    name: "Search - Competitor Comparison",
-    type: "Search",
-    status: "ENABLED",
-    budget: 95.00,
-    bidding_strategy: "Maximize clicks",
-    impressions: 36100,
-    clicks: 1820,
-    ctr: 5.04,
-    avg_cpc: 2.45,
-    cost: 4459.00,
-    conversions: 142.0,
-    cost_per_conv: 31.40,
-    conv_rate: 7.80,
-    opt_score: 79.4
-  }
-];
-
-let inMemoryCampaigns = [...DEFAULT_CAMPAIGNS];
+// Cloudflare Pages Functions - Live Google Ads API Backend (100% inside Cloudflare Ecosystem)
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -114,40 +7,9 @@ function jsonResponse(data, status = 200) {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, developer-token",
     }
   });
-}
-
-function generateTimeseriesData(days = 30) {
-  const data = [];
-  const now = new Date();
-  for (let i = days; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dayOfWeek = d.getDay();
-    const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 0.72 : 1.05;
-    const wave = Math.sin((days - i) / 3.0) * 0.15 + 1.0;
-    
-    const clicks = Math.round((950 + (days - i) * 12 + ((days - i) % 5 * 40)) * wave * weekendFactor);
-    const impressions = Math.round(clicks * (18.5 + ((days - i) % 3)));
-    const cpc = +(1.25 + (((days - i) % 7) * 0.05)).toFixed(2);
-    const cost = +(clicks * cpc).toFixed(2);
-    const conversions = Math.round(clicks * 0.078);
-    const cost_per_conv = +(cost / Math.max(conversions, 1)).toFixed(2);
-    const ctr = +((clicks / Math.max(impressions, 1)) * 100).toFixed(2);
-
-    data.push({
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      full_date: d.toISOString().split("T")[0],
-      clicks,
-      impressions,
-      cost,
-      conversions,
-      cost_per_conv,
-      ctr
-    });
-  }
-  return data;
 }
 
 export async function onRequest(context) {
@@ -162,12 +24,12 @@ export async function onRequest(context) {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, developer-token",
       }
     });
   }
 
-  // Health
+  // Health check
   if (path.endsWith("/api/health") || path === "/api/health") {
     return jsonResponse({
       status: "ok",
@@ -176,41 +38,245 @@ export async function onRequest(context) {
     });
   }
 
-  // Google OAuth token verification
+  // ─── LIVE GOOGLE ADS SYNC ENDPOINT ──────────────────────────────────────────
+  if (path.endsWith("/api/googleads/sync") && request.method === "POST") {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const accessToken = body.access_token;
+      let customerId = (body.customer_id || env?.GOOGLE_ADS_CUSTOMER_ID || '').replace(/[^0-9]/g, '');
+      const developerToken = body.developer_token || env?.GOOGLE_ADS_DEVELOPER_TOKEN || '';
+
+      if (!accessToken) {
+        return jsonResponse({ error: "Missing Google OAuth access_token" }, 400);
+      }
+
+      // Step 1: Fetch real user profile from Google UserInfo endpoint
+      let userProfile = null;
+      try {
+        const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        if (userRes.ok) {
+          const u = await userRes.json();
+          userProfile = {
+            id: u.sub,
+            name: u.name,
+            email: u.email,
+            picture: u.picture
+          };
+        }
+      } catch (err) {
+        console.warn("Failed to fetch userinfo:", err);
+      }
+
+      // If no developer token is provided yet
+      if (!developerToken) {
+        return jsonResponse({
+          success: true,
+          is_live: false,
+          needs_developer_token: true,
+          user: userProfile || {
+            name: "Authenticated User",
+            email: "user@gmail.com"
+          },
+          message: "Google OAuth connected successfully. To fetch live campaigns directly from Google Ads API, a Google Ads Developer Token is required.",
+          account_id: customerId || "Not specified",
+          campaigns: [],
+          summary: {
+            cost: { value: 0, formatted: "$0.00", change_pct: 0 },
+            impressions: { value: 0, formatted: "0", change_pct: 0 },
+            clicks: { value: 0, formatted: "0", change_pct: 0 },
+            conversions: { value: 0, formatted: "0", change_pct: 0 },
+            ctr: { value: 0, formatted: "0.00%", change_pct: 0 },
+            avg_cpc: { value: 0, formatted: "$0.00", change_pct: 0 }
+          },
+          timeseries: []
+        });
+      }
+
+      // Step 2: Query accessible Google Ads customers if customerId is not yet selected
+      let accessibleCustomers = [];
+      try {
+        const custRes = await fetch("https://googleads.googleapis.com/v18/customers:listAccessibleCustomers", {
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "developer-token": developerToken
+          }
+        });
+        if (custRes.ok) {
+          const custData = await custRes.json();
+          accessibleCustomers = (custData.resourceNames || []).map(r => r.replace("customers/", ""));
+          if (!customerId && accessibleCustomers.length > 0) {
+            customerId = accessibleCustomers[0];
+          }
+        } else {
+          const errData = await custRes.json().catch(() => ({}));
+          console.warn("listAccessibleCustomers failed:", errData);
+        }
+      } catch (e) {
+        console.warn("Accessible customers query error:", e);
+      }
+
+      if (!customerId) {
+        return jsonResponse({
+          success: true,
+          is_live: true,
+          user: userProfile,
+          accessible_customers: accessibleCustomers,
+          message: "No accessible Google Ads customer accounts found for this Google login.",
+          campaigns: [],
+          summary: {
+            cost: { value: 0, formatted: "$0.00" },
+            impressions: { value: 0, formatted: "0" },
+            clicks: { value: 0, formatted: "0" },
+            conversions: { value: 0, formatted: "0" },
+            ctr: { value: 0, formatted: "0.00%" },
+            avg_cpc: { value: 0, formatted: "$0.00" }
+          },
+          timeseries: []
+        });
+      }
+
+      // Step 3: Run GAQL Query to get real campaign performance data
+      const gaqlQuery = `
+        SELECT 
+          campaign.id, 
+          campaign.name, 
+          campaign.status, 
+          campaign.advertising_channel_type,
+          metrics.impressions, 
+          metrics.clicks, 
+          metrics.ctr, 
+          metrics.average_cpc, 
+          metrics.cost_micros, 
+          metrics.conversions
+        FROM campaign
+        WHERE segments.date DURING LAST_30_DAYS
+      `;
+
+      const adsApiUrl = `https://googleads.googleapis.com/v18/customers/${customerId}/googleAds:searchStream`;
+      const searchRes = await fetch(adsApiUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "developer-token": developerToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ query: gaqlQuery })
+      });
+
+      if (!searchRes.ok) {
+        const errorJson = await searchRes.json().catch(() => ({}));
+        const apiErrorMessage = errorJson?.error?.message || `Google Ads API HTTP ${searchRes.status}`;
+        return jsonResponse({
+          success: false,
+          is_live: true,
+          user: userProfile,
+          error: apiErrorMessage,
+          customer_id: customerId,
+          accessible_customers: accessibleCustomers,
+          details: errorJson
+        }, 400);
+      }
+
+      // Step 4: Parse searchStream results
+      const rawRows = await searchRes.json();
+      const campaignsList = [];
+      let totalCostMicros = 0;
+      let totalClicks = 0;
+      let totalImpressions = 0;
+      let totalConversions = 0;
+
+      // searchStream returns an array of batch results
+      for (const batch of rawRows) {
+        if (!batch.results) continue;
+        for (const row of batch.results) {
+          const c = row.campaign || {};
+          const m = row.metrics || {};
+          
+          const costMicros = parseInt(m.costMicros || 0, 10);
+          const clicks = parseInt(m.clicks || 0, 10);
+          const impressions = parseInt(m.impressions || 0, 10);
+          const conversions = parseFloat(m.conversions || 0);
+          const avgCpcMicros = parseInt(m.averageCpc || 0, 10);
+          const ctr = m.ctr ? (parseFloat(m.ctr) * 100) : 0;
+
+          totalCostMicros += costMicros;
+          totalClicks += clicks;
+          totalImpressions += impressions;
+          totalConversions += conversions;
+
+          campaignsList.push({
+            id: c.id,
+            name: c.name || "Untitled Campaign",
+            status: c.status || "ENABLED",
+            type: c.advertisingChannelType || "Search",
+            budget: 0,
+            impressions,
+            clicks,
+            ctr: +ctr.toFixed(2),
+            avg_cpc: +(avgCpcMicros / 1000000).toFixed(2),
+            cost: +(costMicros / 1000000).toFixed(2),
+            conversions,
+            cost_per_conv: conversions > 0 ? +((costMicros / 1000000) / conversions).toFixed(2) : 0,
+            bidding_strategy: "Automated"
+          });
+        }
+      }
+
+      const totalCost = +(totalCostMicros / 1000000).toFixed(2);
+      const avgCtr = totalImpressions > 0 ? +((totalClicks / totalImpressions) * 100).toFixed(2) : 0;
+      const avgCpc = totalClicks > 0 ? +(totalCost / totalClicks).toFixed(2) : 0;
+
+      return jsonResponse({
+        success: true,
+        is_live: true,
+        user: userProfile,
+        customer_id: customerId,
+        accessible_customers: accessibleCustomers,
+        campaigns: campaignsList,
+        summary: {
+          cost: { value: totalCost, formatted: `$${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, change_pct: 0 },
+          impressions: { value: totalImpressions, formatted: totalImpressions.toLocaleString(), change_pct: 0 },
+          clicks: { value: totalClicks, formatted: totalClicks.toLocaleString(), change_pct: 0 },
+          avg_cpc: { value: avgCpc, formatted: `$${avgCpc.toFixed(2)}`, change_pct: 0 },
+          conversions: { value: totalConversions, formatted: totalConversions.toFixed(1), change_pct: 0 },
+          ctr: { value: avgCtr, formatted: `${avgCtr}%`, change_pct: 0 }
+        }
+      });
+    } catch (e) {
+      return jsonResponse({ error: e.message }, 500);
+    }
+  }
+
+  // ─── AUTH / GOOGLE VERIFY FALLBACK ──────────────────────────────────────────
   if (path.endsWith("/api/auth/google/verify") && request.method === "POST") {
     try {
-      const body = await request.json();
+      const body = await request.json().catch(() => ({}));
       const credential = body.credential;
 
       if (!credential) {
         return jsonResponse({ error: "Missing credential token" }, 400);
       }
 
-      // Verify token with Google's public tokeninfo endpoint
-      let googleUser = null;
-      try {
-        const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
-        if (verifyRes.ok) {
-          const info = await verifyRes.json();
-          googleUser = {
+      // Check Google tokeninfo endpoint
+      const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+      if (verifyRes.ok) {
+        const info = await verifyRes.json();
+        return jsonResponse({
+          success: true,
+          user: {
             id: info.sub,
             name: info.name || "Google User",
             email: info.email,
             picture: info.picture,
             account_id: env?.GOOGLE_ADS_CUSTOMER_ID || "482-910-2391",
             account_name: `${info.name || 'Personal'}'s Google Ads`
-          };
-        }
-      } catch (err) {
-        console.warn("Google tokeninfo verify error:", err);
+          }
+        });
       }
 
-      // If tokeninfo verification succeeded, return it
-      if (googleUser) {
-        return jsonResponse({ success: true, user: googleUser });
-      }
-
-      // Fallback: Safe payload parse
+      // Safe payload decode fallback
       const parts = credential.split(".");
       if (parts.length >= 2) {
         const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -233,106 +299,6 @@ export async function onRequest(context) {
     } catch (e) {
       return jsonResponse({ error: e.message }, 500);
     }
-  }
-
-  // Account details
-  if (path.endsWith("/api/account")) {
-    return jsonResponse({
-      customer_id: env?.GOOGLE_ADS_CUSTOMER_ID || "482-910-2391",
-      name: "Global Performance Hub",
-      currency: "USD",
-      time_zone: "America/New_York (GMT-04:00)",
-      optimization_score: 88.4,
-      manager_account: "982-104-5821",
-      status: "Active",
-      network: "Cloudflare Edge"
-    });
-  }
-
-  // Metrics summary
-  if (path.endsWith("/api/metrics/summary")) {
-    const totalCost = inMemoryCampaigns.reduce((sum, c) => sum + c.cost, 0);
-    const totalClicks = inMemoryCampaigns.reduce((sum, c) => sum + c.clicks, 0);
-    const totalImpressions = inMemoryCampaigns.reduce((sum, c) => sum + c.impressions, 0);
-    const totalConversions = inMemoryCampaigns.reduce((sum, c) => sum + c.conversions, 0);
-
-    const avgCtr = totalImpressions ? +((totalClicks / totalImpressions) * 100).toFixed(2) : 0;
-    const avgCpc = totalClicks ? +(totalCost / totalClicks).toFixed(2) : 0;
-    const costPerConv = totalConversions ? +(totalCost / totalConversions).toFixed(2) : 0;
-    const convRate = totalClicks ? +((totalConversions / totalClicks) * 100).toFixed(2) : 0;
-    const avgOptScore = +(inMemoryCampaigns.reduce((sum, c) => sum + c.opt_score, 0) / inMemoryCampaigns.length).toFixed(1);
-
-    return jsonResponse({
-      cost: { value: totalCost, formatted: `$${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, change_pct: 12.4, is_positive: false },
-      impressions: { value: totalImpressions, formatted: totalImpressions.toLocaleString(), change_pct: 18.2, is_positive: true },
-      clicks: { value: totalClicks, formatted: totalClicks.toLocaleString(), change_pct: 14.8, is_positive: true },
-      avg_cpc: { value: avgCpc, formatted: `$${avgCpc.toFixed(2)}`, change_pct: -2.1, is_positive: true },
-      conversions: { value: totalConversions, formatted: totalConversions.toFixed(1), change_pct: 21.6, is_positive: true },
-      cost_per_conv: { value: costPerConv, formatted: `$${costPerConv.toFixed(2)}`, change_pct: -7.5, is_positive: true },
-      ctr: { value: avgCtr, formatted: `${avgCtr}%`, change_pct: 0.8, is_positive: true },
-      conv_rate: { value: convRate, formatted: `${convRate}%`, change_pct: 1.2, is_positive: true },
-      optimization_score: avgOptScore
-    });
-  }
-
-  // Time series
-  if (path.endsWith("/api/metrics/timeseries")) {
-    const daysParam = parseInt(url.searchParams.get("days") || "30", 10);
-    return jsonResponse(generateTimeseriesData(daysParam));
-  }
-
-  // Campaigns list
-  if (path.endsWith("/api/campaigns") && request.method === "GET") {
-    const status = url.searchParams.get("status");
-    if (status && status.toUpperCase() !== "ALL") {
-      return jsonResponse(inMemoryCampaigns.filter(c => c.status.toUpperCase() === status.toUpperCase()));
-    }
-    return jsonResponse(inMemoryCampaigns);
-  }
-
-  // Campaign status toggle
-  if (path.includes("/api/campaigns/") && path.endsWith("/status") && request.method === "PATCH") {
-    const parts = path.split("/");
-    const id = parts[parts.indexOf("campaigns") + 1];
-    const body = await request.json().catch(() => ({}));
-    const newStatus = (body.status || "ENABLED").toUpperCase();
-
-    const campaign = inMemoryCampaigns.find(c => c.id === id);
-    if (campaign) {
-      campaign.status = newStatus;
-      return jsonResponse({ success: true, campaign });
-    }
-    return jsonResponse({ error: "Campaign not found" }, 404);
-  }
-
-  // Recommendations
-  if (path.endsWith("/api/recommendations")) {
-    return jsonResponse([
-      {
-        id: "rec_1",
-        title: "Upgrade to Performance Max",
-        description: "Reach audiences across YouTube, Display, Search, Discover, Gmail, and Maps from a single campaign.",
-        impact: "+4.2% score lift",
-        type: "Bidding & Budgets",
-        action_text: "Apply recommendation"
-      },
-      {
-        id: "rec_2",
-        title: "Add broad match keywords",
-        description: "Help your ads show on more relevant searches that could convert, using smart bidding signals.",
-        impact: "+2.8% score lift",
-        type: "Keywords & Targeting",
-        action_text: "View 14 keywords"
-      },
-      {
-        id: "rec_3",
-        title: "Improve responsive search ads",
-        description: "Add 3 more headlines and 2 descriptions to increase ad strength from Good to Excellent.",
-        impact: "+1.9% score lift",
-        type: "Ads & Assets",
-        action_text: "Edit assets"
-      }
-    ]);
   }
 
   return jsonResponse({ error: `Not found: ${path}` }, 404);

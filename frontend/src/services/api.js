@@ -235,3 +235,21 @@ export async function verifyGoogleTokenWithBackend(credential) {
     }
   }
 }
+
+export async function syncGoogleAdsWithEdge(accessToken, customerId = '', developerToken = '') {
+  try {
+    const res = await fetch(`${API_URL}/api/googleads/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_token: accessToken,
+        customer_id: customerId,
+        developer_token: developerToken
+      })
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("Live Google Ads API fetch error", err);
+    throw err;
+  }
+}

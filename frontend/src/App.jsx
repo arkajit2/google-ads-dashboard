@@ -7,19 +7,21 @@ import AuthModal from './components/AuthModal';
 import { 
   fetchSummaryMetrics, 
   fetchTimeseriesData, 
-  fetchCampaigns 
+  fetchCampaigns,
+  syncGoogleAdsWithEdge
 } from './services/api';
 import { 
   BarChart3, 
   ShieldCheck, 
   Calendar, 
   Sparkles, 
-  Lock, 
-  Unlock,
   RefreshCw,
   TrendingUp,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  Info,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 export default function App() {
@@ -40,19 +42,31 @@ export default function App() {
   const [timeseries, setTimeseries] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [selectedDays, setSelectedDays] = useState(30);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Chart Metric Selectors
   const [primaryMetric, setPrimaryMetric] = useState('clicks');
   const [secondaryMetric, setSecondaryMetric] = useState('impressions');
 
-  // Load Dashboard Data
-  const loadData = async (days = selectedDays) => {
+  // Load Data
+  const loadData = async (currentUser = user) => {
     setLoading(true);
     try {
+      if (currentUser?.is_live && currentUser?.access_token) {
+        // Fetch live from Google Ads API
+        const devToken = localStorage.getItem('google_ads_dev_token') || '';
+        const res = await syncGoogleAdsWithEdge(currentUser.access_token, currentUser.customer_id || '', devToken);
+        if (res && res.success) {
+          setCampaigns(res.campaigns || []);
+          if (res.summary) setSummary(res.summary);
+          return;
+        }
+      }
+
+      // Default sample view for preview
       const [sumData, tsData, cmpData] = await Promise.all([
         fetchSummaryMetrics(),
-        fetchTimeseriesData(days),
+        fetchTimeseriesData(selectedDays),
         fetchCampaigns()
       ]);
       setSummary(sumData);
@@ -66,17 +80,20 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadData(selectedDays);
-  }, [selectedDays]);
+    loadData(user);
+  }, [user, selectedDays]);
 
   const handleLoginSuccess = (profile) => {
     setUser(profile);
     localStorage.setItem('google_ads_user', JSON.stringify(profile));
+    if (profile.campaigns) setCampaigns(profile.campaigns);
+    if (profile.summary) setSummary(profile.summary);
   };
 
   const handleSignOut = () => {
     setUser(null);
     localStorage.removeItem('google_ads_user');
+    window.location.reload();
   };
 
   const handleMetricCardClick = (metricKey) => {
@@ -107,12 +124,12 @@ export default function App() {
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                Advertising Performance & Campaign Intelligence
+                Live Google Ads Performance Intelligence
               </h1>
               {loading && <RefreshCw className="w-4 h-4 text-[#FFF880] animate-spin" />}
             </div>
             <p className="text-xs text-[#B8A6CC] mt-1">
-              Reporting Window: <span className="text-[#FFF880] font-semibold">Last 30 Days</span> • Currency: USD ($)
+              Reporting Cycle: <span className="text-[#FFF880] font-semibold">Last 30 Days</span> • Account: {user ? (user.customer_id || user.email) : "Preview Sample"}
             </p>
           </div>
 
@@ -121,7 +138,7 @@ export default function App() {
             {user ? (
               <div className="flex items-center space-x-2 bg-[#221230] border border-emerald-800/60 px-3 py-1.5 rounded-lg text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span className="text-emerald-300 font-medium">Logged in as {user.name}</span>
+                <span className="text-emerald-300 font-medium">Connected: {user.name || user.email}</span>
               </div>
             ) : (
               <div className="flex items-center space-x-2 bg-[#221230] border border-[#3D1F57] px-3 py-1.5 rounded-lg text-xs">
@@ -141,20 +158,35 @@ export default function App() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-[#FFF880]">
-                  Viewing Sample Performance Report
+                  Viewing Sample Performance Report (Not Signed In)
                 </h3>
                 <p className="text-xs text-[#B8A6CC] mt-0.5 leading-relaxed">
-                  Sign in with your Google account to link your active advertising profiles and review campaign metrics.
+                  Sign in with your personal or client Google profile to load your real Google Ads account campaigns, clicks, and spend.
                 </p>
               </div>
             </div>
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="px-5 py-2 rounded-xl bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] text-xs font-bold transition shadow-[0_0_15px_rgba(255,248,128,0.25)] shrink-0 flex items-center space-x-1.5"
+              className="px-5 py-2 rounded-xl bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] text-xs font-bold transition shadow-[0_0_15px_rgba(255,248,128,0.25)] shrink-0 flex items-center space-x-1.5 cursor-pointer"
             >
-              <span>Sign In with Google</span>
+              <span>Connect with Google Ads</span>
               <ArrowUpRight className="w-4 h-4" />
             </button>
+          </div>
+        )}
+
+        {/* Live Authenticated Banner */}
+        {user && user.needs_developer_token && (
+          <div className="p-4 rounded-xl bg-[#221230] border border-amber-500/40 flex items-start space-x-3 text-xs">
+            <Info className="w-4 h-4 text-[#FFF880] shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-white">
+                Google Ads Account Authorized for <span className="text-[#FFF880]">{user.name}</span> ({user.email})
+              </p>
+              <p className="text-[#B8A6CC] leading-relaxed">
+                Google OAuth access token is active. To execute live production queries against Google's API servers (`googleads.googleapis.com`), Google requires a Developer Token from a Google Ads Manager (MCC) Account.
+              </p>
+            </div>
           </div>
         )}
 
@@ -178,7 +210,7 @@ export default function App() {
         {/* Campaign Reporting Breakdown Table */}
         <CampaignsTable
           campaigns={campaigns}
-          onRefresh={() => loadData(selectedDays)}
+          onRefresh={() => loadData(user)}
         />
 
       </main>
