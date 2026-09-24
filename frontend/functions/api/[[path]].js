@@ -12,8 +12,8 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-// Google Ads API error parser - extracts precise nested Google RPC / GoogleAdsFailure errors
-function parseGoogleAdsError(data, fallbackStatus) {
+// Google Ads API error parser - extracts precise user-friendly messages
+function parseGoogleAdsError(data, fallbackStatus, customerId = '') {
   if (!data) return `Google Ads API HTTP ${fallbackStatus || '403'}`;
   
   const root = Array.isArray(data) ? (data[0] || {}) : data;
@@ -26,8 +26,12 @@ function parseGoogleAdsError(data, fallbackStatus) {
       const gErr = item.errors[0];
       const errCode = gErr.errorCode ? Object.values(gErr.errorCode)[0] : '';
       const msg = gErr.message || '';
-      if (errCode && msg) {
-        return `${errCode}: ${msg}`;
+      
+      if (errCode === 'USER_PERMISSION_DENIED') {
+        return `Permission Denied: Your Google login does not have access to Customer ID ${customerId || 'entered'}. Check permissions in Google Ads.`;
+      }
+      if (errCode === 'DEVELOPER_TOKEN_PROHIBITED' || errCode === 'DEVELOPER_TOKEN_NOT_APPROVED') {
+        return 'Server Developer Token configuration error. Please ensure GOOGLE_ADS_DEVELOPER_TOKEN is set in Cloudflare Pages secrets.';
       }
       if (msg) return msg;
       if (errCode) return `Google Ads Error: ${errCode}`;
@@ -40,10 +44,6 @@ function parseGoogleAdsError(data, fallbackStatus) {
     if (item.reason) {
       return `${item.reason}: ${errorObj.message || 'Permission denied'}`;
     }
-
-    if (item.links && item.links.length > 0 && item.links[0].url) {
-      return `${errorObj.message || 'Action required'}. Direct link: ${item.links[0].url}`;
-    }
   }
 
   if (errorObj.message) {
@@ -53,7 +53,7 @@ function parseGoogleAdsError(data, fallbackStatus) {
     return errorObj.message;
   }
 
-  return `Google Ads API HTTP ${fallbackStatus || 403} (${errorObj.status || 'Forbidden / Authorization Error'})`;
+  return `Google Ads API HTTP ${fallbackStatus || 403} (${errorObj.status || 'Permission Denied'})`;
 }
 
 // Google Ads API version fallback helper (handles annual deprecations e.g. v25, v24, v23)
@@ -171,13 +171,9 @@ export async function onRequest(context) {
 
       // If still no customer ID found or entered
       if (!customerId) {
-        let helpMessage = listAccountsError;
-        if (!helpMessage) {
-          if (!developerToken) {
-            helpMessage = "Google Ads API requires a Developer Token to auto-query accounts. Enter your Developer Token (from your Google Ads Manager Account > Tools > API Center) above, or enter your Customer ID.";
-          } else {
-            helpMessage = "No accessible Google Ads accounts found for this Google email. Enter your Customer ID (e.g. 123-456-7890) above.";
-          }
+        let helpMessage = "Please enter your Google Ads Customer ID (e.g. 123-456-7890) above to sync live account data.";
+        if (listAccountsError && !listAccountsError.includes("Server Developer Token")) {
+          helpMessage = listAccountsError;
         }
         return jsonResponse({
           success: true,
@@ -233,7 +229,7 @@ export async function onRequest(context) {
 
       if (!searchRes || !searchRes.ok) {
         const errorJson = searchRes ? await searchRes.json().catch(() => ({})) : {};
-        const apiErrorMessage = parseGoogleAdsError(errorJson, searchRes ? searchRes.status : 'Unavailable');
+        const apiErrorMessage = parseGoogleAdsError(errorJson, searchRes ? searchRes.status : 'Unavailable', customerId);
         return jsonResponse({
           success: false,
           is_live: true,

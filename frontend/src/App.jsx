@@ -44,10 +44,8 @@ export default function App() {
     }
   });
 
-  // Customer ID and token input state
+  // Customer ID and account state
   const [customerIdInput, setCustomerIdInput] = useState(user?.customer_id || '');
-  const [devTokenInput, setDevTokenInput] = useState(() => localStorage.getItem('google_ads_dev_token') || '');
-  const [loginCidInput, setLoginCidInput] = useState(() => localStorage.getItem('google_ads_login_cid') || '');
   const [accessibleAccounts, setAccessibleAccounts] = useState([]);
   const [apiNotice, setApiNotice] = useState(null);
 
@@ -65,9 +63,7 @@ export default function App() {
   // Load Data
   const loadData = async (
     currentUser = user, 
-    explicitCid = customerIdInput,
-    explicitDevToken = devTokenInput,
-    explicitLoginCid = loginCidInput
+    explicitCid = customerIdInput
   ) => {
     setLoading(true);
     setApiNotice(null);
@@ -77,9 +73,7 @@ export default function App() {
         const cidToUse = (explicitCid !== undefined && explicitCid !== '') ? explicitCid : (currentUser.customer_id || '');
         const res = await syncGoogleAdsWithEdge(
           currentUser.access_token, 
-          cidToUse, 
-          explicitDevToken, 
-          explicitLoginCid
+          cidToUse
         );
         if (res) {
           if (res.accessible_customers && res.accessible_customers.length > 0) {
@@ -263,72 +257,37 @@ export default function App() {
           </div>
         )}
 
-        {/* Authenticated Account Bar */}
+        {/* Authenticated Account Bar (Zero API / Token friction - just Customer ID) */}
         {user && (
           <div className="space-y-2">
             <div className="p-3.5 rounded-xl bg-[#221230] border border-[#3D1F57] flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Customer ID */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-[#B8A6CC] font-medium">Customer ID:</span>
-                  {accessibleAccounts.length > 0 ? (
-                    <select
-                      value={customerIdInput}
-                      onChange={(e) => {
-                        setCustomerIdInput(e.target.value);
-                        loadData(user, e.target.value, devTokenInput, loginCidInput);
-                      }}
-                      className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none font-mono"
-                    >
-                      {accessibleAccounts.map(id => (
-                        <option key={id} value={id}>CID: {id}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      placeholder="e.g. 123-456-7890"
-                      value={customerIdInput}
-                      onChange={(e) => setCustomerIdInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') loadData(user, customerIdInput, devTokenInput, loginCidInput);
-                      }}
-                      className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36 font-mono"
-                    />
-                  )}
-                </div>
-
-                {/* Developer Token */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-[#B8A6CC] font-medium">Dev Token:</span>
-                  <input
-                    type="password"
-                    placeholder="From MCC API Center"
-                    value={devTokenInput}
+              <div className="flex items-center space-x-2">
+                <span className="text-[#B8A6CC] font-medium">Customer ID:</span>
+                {accessibleAccounts.length > 1 ? (
+                  <select
+                    value={customerIdInput}
                     onChange={(e) => {
-                      const val = e.target.value.trim();
-                      setDevTokenInput(val);
-                      localStorage.setItem('google_ads_dev_token', val);
+                      setCustomerIdInput(e.target.value);
+                      loadData(user, e.target.value);
                     }}
-                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-44 font-mono"
-                  />
-                </div>
-
-                {/* Manager / MCC Customer ID (Optional) */}
-                <div className="flex items-center space-x-2">
-                  <span className="text-[#B8A6CC] font-medium">Manager CID (Opt):</span>
+                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1.5 text-white text-xs outline-none font-mono"
+                  >
+                    {accessibleAccounts.map(id => (
+                      <option key={id} value={id}>CID: {id}</option>
+                    ))}
+                  </select>
+                ) : (
                   <input
                     type="text"
-                    placeholder="MCC ID if managed"
-                    value={loginCidInput}
-                    onChange={(e) => {
-                      const val = e.target.value.trim();
-                      setLoginCidInput(val);
-                      localStorage.setItem('google_ads_login_cid', val);
+                    placeholder="e.g. 123-456-7890"
+                    value={customerIdInput}
+                    onChange={(e) => setCustomerIdInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') loadData(user, customerIdInput);
                     }}
-                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36 font-mono"
+                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-3 py-1.5 text-white text-xs outline-none w-44 font-mono"
                   />
-                </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -342,7 +301,7 @@ export default function App() {
                   </button>
                 )}
                 <button
-                  onClick={() => loadData(user, customerIdInput, devTokenInput, loginCidInput)}
+                  onClick={() => loadData(user, customerIdInput)}
                   disabled={loading}
                   className="px-3.5 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-[0_0_10px_rgba(255,248,128,0.2)]"
                 >
@@ -370,7 +329,7 @@ export default function App() {
                 )}
                 <div className="flex-1 space-y-1.5">
                   <p className="font-semibold text-white text-sm">
-                    {apiNotice.type === 'error' ? 'Google Ads API Status' : 'Account Notice'}
+                    {apiNotice.type === 'error' ? 'Google Ads Status' : 'Account Notice'}
                   </p>
                   <p className="text-xs leading-relaxed text-gray-200">{apiNotice.text}</p>
                   
@@ -386,22 +345,6 @@ export default function App() {
                         <span>Enable Google Ads API in Google Cloud Console</span>
                         <ArrowUpRight className="w-3.5 h-3.5" />
                       </a>
-                    </div>
-                  )}
-
-                  {/* Actionable guidance if Developer Token is needed */}
-                  {apiNotice.text && apiNotice.text.toLowerCase().includes('developer token') && !devTokenInput && (
-                    <div className="pt-1 text-[11px] text-amber-200/90 leading-relaxed">
-                      Tip: Google Ads API requires a developer token from a Google Ads Manager Account (MCC). If you do not have one, you can create a free manager account at{' '}
-                      <a
-                        href="https://ads.google.com/home/tools/manager-accounts/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#FFF880] underline font-medium"
-                      >
-                        Google Ads MCC
-                      </a>{' '}
-                      and copy the token from <strong>Tools &amp; Settings &gt; API Center</strong> into the <strong>Dev Token</strong> field above.
                     </div>
                   )}
                 </div>
