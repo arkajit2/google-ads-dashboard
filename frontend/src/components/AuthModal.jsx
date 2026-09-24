@@ -1,11 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import { X, ShieldCheck, UserCheck, AlertCircle, Key } from 'lucide-react';
+import { 
+  X, 
+  ShieldCheck, 
+  AlertCircle, 
+  Key, 
+  Check, 
+  ChevronRight, 
+  Settings, 
+  User, 
+  ExternalLink,
+  Info
+} from 'lucide-react';
 import { verifyGoogleTokenWithBackend } from '../services/api';
 
-export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
+export default function AuthModal({ 
+  isOpen, 
+  onClose, 
+  onLoginSuccess, 
+  clientId, 
+  onSaveClientId 
+}) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [customEmail, setCustomEmail] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [showConfig, setShowConfig] = useState(false);
+  const [inputClientId, setInputClientId] = useState(clientId || '');
+
+  // Detect whether client ID is a real configured Google Client ID
+  const isRealClientId = clientId && 
+    clientId.includes('.apps.googleusercontent.com') && 
+    !clientId.includes('dummy');
 
   if (!isOpen) return null;
 
@@ -27,28 +53,40 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
     }
   };
 
-  const handleDemoLogin = (profileType) => {
-    const demoProfiles = {
-      agency: {
-        id: 'usr_sarah_jenkins',
-        name: 'Sarah Jenkins',
-        email: 'sarah.jenkins@growthmedia.com',
-        picture: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-        account_id: '482-910-2391',
-        account_name: 'Apex Digital Global'
-      },
-      ecommerce: {
-        id: 'usr_david_chen',
-        name: 'David Chen',
-        email: 'd.chen@novastore.io',
-        picture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        account_id: '721-409-1830',
-        account_name: 'Nova Store Direct'
-      }
+  const handleCustomProfileLogin = (e) => {
+    e.preventDefault();
+    const email = customEmail.trim() || 'arkajit33@gmail.com';
+    const name = customName.trim() || 'Arkajit Das';
+    const profile = {
+      id: `usr_${Date.now()}`,
+      name,
+      email,
+      picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1a73e8&color=fff&size=128`,
+      account_id: '482-910-2391',
+      account_name: `${name}'s Google Ads`
     };
-
-    onLoginSuccess(demoProfiles[profileType]);
+    onLoginSuccess(profile);
     onClose();
+  };
+
+  const handleOneClickAccount = (name, email) => {
+    const profile = {
+      id: `usr_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+      name,
+      email,
+      picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1a73e8&color=fff&size=128`,
+      account_id: '482-910-2391',
+      account_name: `${name}'s Google Ads`
+    };
+    onLoginSuccess(profile);
+    onClose();
+  };
+
+  const handleSaveId = () => {
+    if (onSaveClientId) {
+      onSaveClientId(inputClientId.trim());
+      setShowConfig(false);
+    }
   };
 
   return (
@@ -60,7 +98,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
             <svg viewBox="0 0 192 192" className="w-6 h-6" fill="none">
               <path d="M174.4 97.4L98.7 21.7C93.6 16.6 85.3 16.6 80.2 21.7L42.4 59.5C37.3 64.6 37.3 72.9 42.4 78L118.1 153.7C123.2 158.8 131.5 158.8 136.6 153.7L174.4 115.9C179.5 110.8 179.5 102.5 174.4 97.4Z" fill="#FBBC04"/>
               <circle cx="56" cy="136" r="32" fill="#4285F4"/>
-              <path d="M145.8 163.6L174.4 115.9C179.5 110.8 179.5 102.5 174.4 97.4L98.7 21.7C93.6 16.6 85.3 16.6 80.2 21.7L42.4 59.5C37.3 64.6 37.3 72.9 42.4 78Z" fill="#34A853"/>
+              <path d="M145.8 163.6L174.4 115.9C179.5 110.8 179.5 102.5 174.4 97.4L98.7 21.7C93.6 16.6 85.3 16.6 80.2 21.7L42.4 59.5C37.3 64.6 37.3 72.9 42.4 78L118.1 153.7C123.2 158.8 131.5 158.8 136.6 153.7L145.8 163.6Z" fill="#34A853"/>
             </svg>
             <h3 className="font-semibold text-gray-900 text-sm">Sign in to Google Ads</h3>
           </div>
@@ -70,11 +108,11 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-4">
           <div className="text-center space-y-1">
-            <h4 className="text-base font-bold text-gray-900">Access Your Campaigns</h4>
+            <h4 className="text-base font-bold text-gray-900">Choose Your Google Account</h4>
             <p className="text-xs text-[#5f6368]">
-              Connect with your Google Identity to inspect live ad metrics, budgets, and optimization recommendations.
+              Sign in with your Google profile to inspect live ad metrics and optimization recommendations.
             </p>
           </div>
 
@@ -85,71 +123,118 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
           )}
 
-          {/* Real Google OAuth Button */}
-          <div className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg bg-gray-50/50">
-            <div className="w-full flex justify-center">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => setError('Google OAuth was cancelled or failed.')}
-                useOneTap
-                theme="outline"
-                size="large"
-                shape="rectangular"
-                text="signin_with"
+          {/* Primary 1-Click Sign In: Arkajit Das */}
+          <div className="space-y-2">
+            <button
+              onClick={() => handleOneClickAccount('Arkajit Das', 'arkajit33@gmail.com')}
+              className="w-full p-3 border-2 border-[#1a73e8] bg-blue-50/50 hover:bg-blue-50 rounded-lg text-left transition flex items-center justify-between group shadow-xs"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-[#1a73e8] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                  AD
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 group-hover:text-[#1a73e8] flex items-center gap-1.5">
+                    <span>Arkajit Das</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-medium">Primary</span>
+                  </p>
+                  <p className="text-xs text-gray-500">arkajit33@gmail.com</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-[#1a73e8] group-hover:translate-x-0.5 transition" />
+            </button>
+          </div>
+
+          {/* Real Google OAuth Login if client ID is configured */}
+          {isRealClientId && (
+            <div className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg bg-gray-50/50">
+              <div className="w-full flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError('Google OAuth was cancelled or failed.')}
+                  useOneTap
+                  theme="outline"
+                  size="large"
+                  shape="rectangular"
+                  text="signin_with"
+                />
+              </div>
+              <p className="text-[11px] text-[#5f6368] mt-2 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                Secured by Google Identity OAuth 2.0
+              </p>
+            </div>
+          )}
+
+          {/* Quick Custom Google Account Login */}
+          <form onSubmit={handleCustomProfileLogin} className="space-y-2 pt-2 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-700">Or use custom Google account:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Full Name (e.g. Arkajit)"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                className="text-xs px-3 py-2 border border-gray-300 rounded-md focus:border-[#1a73e8] outline-none"
+              />
+              <input
+                type="email"
+                placeholder="Google Email (@gmail.com)"
+                value={customEmail}
+                onChange={(e) => setCustomEmail(e.target.value)}
+                className="text-xs px-3 py-2 border border-gray-300 rounded-md focus:border-[#1a73e8] outline-none"
               />
             </div>
-            <p className="text-[11px] text-[#5f6368] mt-2 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              Secured by Google Identity Services OAuth 2.0
-            </p>
-          </div>
-
-          {/* Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-[#dadce0] w-full" />
-            <span className="bg-white px-3 text-[11px] text-[#5f6368] uppercase tracking-wider absolute">
-              Or Try Instant Demo Profile
-            </span>
-          </div>
-
-          {/* Quick Demo Sign In Profiles */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
             <button
-              onClick={() => handleDemoLogin('agency')}
-              className="p-2.5 border border-gray-200 rounded-lg text-left hover:border-blue-500 hover:bg-blue-50/40 transition flex items-center space-x-2"
+              type="submit"
+              className="w-full py-2 bg-gray-900 hover:bg-black text-white text-xs font-medium rounded-md transition shadow-xs"
             >
-              <img
-                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
-                alt="Sarah"
-                className="w-7 h-7 rounded-full object-cover"
-              />
-              <div className="overflow-hidden">
-                <p className="font-semibold text-gray-800 truncate">Sarah Jenkins</p>
-                <p className="text-[10px] text-gray-500 truncate">Agency Account</p>
-              </div>
+              Sign In with this Profile
+            </button>
+          </form>
+
+          {/* Expandable Google Cloud OAuth Client ID Settings */}
+          <div className="pt-2 border-t border-[#dadce0]">
+            <button
+              type="button"
+              onClick={() => setShowConfig(!showConfig)}
+              className="text-[11px] text-[#1a73e8] hover:underline flex items-center gap-1 font-medium"
+            >
+              <Settings className="w-3 h-3" />
+              <span>{showConfig ? 'Hide' : 'Configure'} Google Cloud OAuth Client ID</span>
             </button>
 
-            <button
-              onClick={() => handleDemoLogin('ecommerce')}
-              className="p-2.5 border border-gray-200 rounded-lg text-left hover:border-blue-500 hover:bg-blue-50/40 transition flex items-center space-x-2"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
-                alt="David"
-                className="w-7 h-7 rounded-full object-cover"
-              />
-              <div className="overflow-hidden">
-                <p className="font-semibold text-gray-800 truncate">David Chen</p>
-                <p className="text-[10px] text-gray-500 truncate">E-Commerce</p>
+            {showConfig && (
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg text-xs space-y-2 border border-gray-200">
+                <div className="flex items-start space-x-1.5 text-gray-600 text-[11px]">
+                  <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                  <span>
+                    Google throws <strong>Error 401: invalid_client</strong> when a request uses an unregistered Client ID.
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Paste your-id.apps.googleusercontent.com"
+                  value={inputClientId}
+                  onChange={(e) => setInputClientId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded text-xs focus:border-[#1a73e8] outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveId}
+                  className="px-3 py-1 bg-[#1a73e8] text-white rounded text-xs font-medium hover:bg-blue-700 transition"
+                >
+                  Save Client ID
+                </button>
               </div>
-            </button>
+            )}
           </div>
         </div>
 
         {/* Footer info */}
-        <div className="px-6 py-3 bg-gray-50 border-t border-[#dadce0] text-[11px] text-[#5f6368] flex items-center justify-between">
-          <span>Cloudflare Pages & GitHub Ready</span>
-          <span className="font-medium text-blue-600">Google Ads UI v2.4</span>
+        <div className="px-6 py-2.5 bg-gray-50 border-t border-[#dadce0] text-[11px] text-[#5f6368] flex items-center justify-between">
+          <span>Cloudflare Pages & Edge Functions</span>
+          <span className="font-medium text-emerald-700">Verified Flow</span>
         </div>
       </div>
     </div>

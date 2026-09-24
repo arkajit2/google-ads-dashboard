@@ -29,6 +29,23 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [clientId, setClientId] = useState(() => {
+    try {
+      return localStorage.getItem('user_google_client_id') || import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const handleSaveClientId = (newId) => {
+    try {
+      localStorage.setItem('user_google_client_id', newId);
+      setClientId(newId);
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+    }
+  };
   
   // Authenticated user state
   const [user, setUser] = useState(() => {
@@ -321,6 +338,8 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
+        clientId={clientId}
+        onSaveClientId={handleSaveClientId}
       />
     </div>
   );
