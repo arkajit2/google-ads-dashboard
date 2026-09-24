@@ -12,6 +12,50 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+// Google Ads API error parser - extracts precise nested Google RPC / GoogleAdsFailure errors
+function parseGoogleAdsError(data, fallbackStatus) {
+  if (!data) return `Google Ads API HTTP ${fallbackStatus || '403'}`;
+  
+  const root = Array.isArray(data) ? (data[0] || {}) : data;
+  const errorObj = root.error || root;
+
+  // Check details array for specific GoogleAdsFailure or Google RPC errors
+  const details = errorObj.details || [];
+  for (const item of details) {
+    if (item.errors && Array.isArray(item.errors) && item.errors.length > 0) {
+      const gErr = item.errors[0];
+      const errCode = gErr.errorCode ? Object.values(gErr.errorCode)[0] : '';
+      const msg = gErr.message || '';
+      if (errCode && msg) {
+        return `${errCode}: ${msg}`;
+      }
+      if (msg) return msg;
+      if (errCode) return `Google Ads Error: ${errCode}`;
+    }
+
+    if (item.reason === 'SERVICE_DISABLED') {
+      return 'Google Ads API is not enabled in your Google Cloud project (core-period-509604-u4). Please enable it in Google Cloud Console > APIs & Services > Library > Google Ads API.';
+    }
+
+    if (item.reason) {
+      return `${item.reason}: ${errorObj.message || 'Permission denied'}`;
+    }
+
+    if (item.links && item.links.length > 0 && item.links[0].url) {
+      return `${errorObj.message || 'Action required'}. Direct link: ${item.links[0].url}`;
+    }
+  }
+
+  if (errorObj.message) {
+    if (errorObj.message.includes('has not been used in project') || errorObj.message.includes('it is disabled')) {
+      return 'Google Ads API has not been enabled in Google Cloud project core-period-509604-u4. Go to Google Cloud Console > APIs & Services > Library to enable it.';
+    }
+    return errorObj.message;
+  }
+
+  return `Google Ads API HTTP ${fallbackStatus || 403} (${errorObj.status || 'Forbidden / Authorization Error'})`;
+}
+
 // Google Ads API version fallback helper (handles annual deprecations e.g. v25, v24, v23)
 async function fetchGoogleAdsWithVersionFallback(endpointPath, options) {
   const versions = ["v25", "v24", "v23", "v22"];
@@ -30,6 +74,7 @@ async function fetchGoogleAdsWithVersionFallback(endpointPath, options) {
   }
   return { res: lastRes, version: versions[0] };
 }
+
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -63,6 +108,7 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       const accessToken = body.access_token;
       let customerId = (body.customer_id || env?.GOOGLE_ADS_CUSTOMER_ID || '').replace(/[^0-9]/g, '');
+      const loginCustomerId = (body.login_customer_id || env?.GOOGLE_ADS_LOGIN_CUSTOMER_ID || '').replace(/[^0-9]/g, '');
       const developerToken = body.developer_token || env?.GOOGLE_ADS_DEVELOPER_TOKEN || '';
 
       if (!accessToken) {
@@ -96,12 +142,15 @@ export async function onRequest(context) {
       if (developerToken) {
         googleAdsHeaders["developer-token"] = developerToken;
       }
+      if (loginCustomerId) {
+        googleAdsHeaders["login-customer-id"] = loginCustomerId;
+      }
 
       // Step 3: Query accessible Google Ads customers if customerId is not yet selected
       let accessibleCustomers = [];
       let listAccountsError = null;
       try {
-        const { res: custRes, version: matchedVersion } = await fetchGoogleAdsWithVersionFallback("customers:listAccessibleCustomers", {
+        const { res: custRes } = await fetchGoogleAdsWithVersionFallback("customers:listAccessibleCustomers", {
           headers: googleAdsHeaders
         });
         if (custRes && custRes.ok) {
@@ -112,7 +161,7 @@ export async function onRequest(context) {
           }
         } else if (custRes) {
           const errData = await custRes.json().catch(() => ({}));
-          listAccountsError = errData?.error?.message || `Google Ads HTTP ${custRes.status}`;
+          listAccountsError = parseGoogleAdsError(errData, custRes.status);
           console.warn("listAccessibleCustomers failed:", custRes.status, errData);
         }
       } catch (e) {
@@ -122,13 +171,21 @@ export async function onRequest(context) {
 
       // If still no customer ID found or entered
       if (!customerId) {
+        let helpMessage = listAccountsError;
+        if (!helpMessage) {
+          if (!developerToken) {
+            helpMessage = "Google Ads API requires a Developer Token to auto-query accounts. Enter your Developer Token (from your Google Ads Manager Account > Tools > API Center) above, or enter your Customer ID.";
+          } else {
+            helpMessage = "No accessible Google Ads accounts found for this Google email. Enter your Customer ID (e.g. 123-456-7890) above.";
+          }
+        }
         return jsonResponse({
           success: true,
           is_live: true,
           user: userProfile,
           accessible_customers: accessibleCustomers,
           customer_id: "",
-          message: listAccountsError || "No accessible Google Ads accounts found for this Google email. Enter your Customer ID (e.g. 123-456-7890) above.",
+          message: helpMessage,
           campaigns: [],
           summary: {
             cost: { value: 0, formatted: "$0.00", change_pct: 0 },
@@ -159,15 +216,24 @@ export async function onRequest(context) {
         WHERE segments.date DURING LAST_30_DAYS
       `;
 
-      const { res: searchRes } = await fetchGoogleAdsWithVersionFallback(`customers/${customerId}/googleAds:searchStream`, {
+      let { res: searchRes } = await fetchGoogleAdsWithVersionFallback(`customers/${customerId}/googleAds:search`, {
         method: "POST",
         headers: googleAdsHeaders,
-        body: JSON.stringify({ query: gaqlQuery })
+        body: JSON.stringify({ query: gaqlQuery, pageSize: 1000 })
       });
+
+      if (!searchRes || (!searchRes.ok && searchRes.status === 404)) {
+        const streamAttempt = await fetchGoogleAdsWithVersionFallback(`customers/${customerId}/googleAds:searchStream`, {
+          method: "POST",
+          headers: googleAdsHeaders,
+          body: JSON.stringify({ query: gaqlQuery })
+        });
+        if (streamAttempt.res) searchRes = streamAttempt.res;
+      }
 
       if (!searchRes || !searchRes.ok) {
         const errorJson = searchRes ? await searchRes.json().catch(() => ({})) : {};
-        const apiErrorMessage = errorJson?.error?.message || `Google Ads API HTTP ${searchRes ? searchRes.status : 'Unavailable'}`;
+        const apiErrorMessage = parseGoogleAdsError(errorJson, searchRes ? searchRes.status : 'Unavailable');
         return jsonResponse({
           success: false,
           is_live: true,
@@ -189,49 +255,94 @@ export async function onRequest(context) {
         });
       }
 
-      // Step 4: Parse searchStream results
-      const rawRows = await searchRes.json();
+      // Step 5: Parse search results (handles both search and searchStream)
+      const rawData = await searchRes.json();
+      let rawRows = [];
+      if (Array.isArray(rawData)) {
+        for (const batch of rawData) {
+          if (batch.results && Array.isArray(batch.results)) {
+            rawRows.push(...batch.results);
+          }
+        }
+      } else if (rawData && Array.isArray(rawData.results)) {
+        rawRows = rawData.results;
+      }
+
       const campaignsList = [];
       let totalCostMicros = 0;
       let totalClicks = 0;
       let totalImpressions = 0;
       let totalConversions = 0;
 
-      // searchStream returns an array of batch results
-      for (const batch of rawRows) {
-        if (!batch.results) continue;
-        for (const row of batch.results) {
-          const c = row.campaign || {};
-          const m = row.metrics || {};
-          
-          const costMicros = parseInt(m.costMicros || 0, 10);
-          const clicks = parseInt(m.clicks || 0, 10);
-          const impressions = parseInt(m.impressions || 0, 10);
-          const conversions = parseFloat(m.conversions || 0);
-          const avgCpcMicros = parseInt(m.averageCpc || 0, 10);
-          const ctr = m.ctr ? (parseFloat(m.ctr) * 100) : 0;
+      for (const row of rawRows) {
+        const c = row.campaign || {};
+        const m = row.metrics || {};
+        
+        const costMicros = parseInt(m.costMicros || 0, 10);
+        const clicks = parseInt(m.clicks || 0, 10);
+        const impressions = parseInt(m.impressions || 0, 10);
+        const conversions = parseFloat(m.conversions || 0);
+        const avgCpcMicros = parseInt(m.averageCpc || 0, 10);
+        const ctr = m.ctr ? (parseFloat(m.ctr) * 100) : 0;
 
-          totalCostMicros += costMicros;
-          totalClicks += clicks;
-          totalImpressions += impressions;
-          totalConversions += conversions;
+        totalCostMicros += costMicros;
+        totalClicks += clicks;
+        totalImpressions += impressions;
+        totalConversions += conversions;
 
-          campaignsList.push({
-            id: c.id,
-            name: c.name || "Untitled Campaign",
-            status: c.status || "ENABLED",
-            type: c.advertisingChannelType || "Search",
-            budget: 0,
-            impressions,
-            clicks,
-            ctr: +ctr.toFixed(2),
-            avg_cpc: +(avgCpcMicros / 1000000).toFixed(2),
-            cost: +(costMicros / 1000000).toFixed(2),
-            conversions,
-            cost_per_conv: conversions > 0 ? +((costMicros / 1000000) / conversions).toFixed(2) : 0,
-            bidding_strategy: "Automated"
+        campaignsList.push({
+          id: c.id,
+          name: c.name || "Untitled Campaign",
+          status: c.status || "ENABLED",
+          type: c.advertisingChannelType || "Search",
+          budget: 0,
+          impressions,
+          clicks,
+          ctr: +ctr.toFixed(2),
+          avg_cpc: +(avgCpcMicros / 1000000).toFixed(2),
+          cost: +(costMicros / 1000000).toFixed(2),
+          conversions,
+          cost_per_conv: conversions > 0 ? +((costMicros / 1000000) / conversions).toFixed(2) : 0,
+          bidding_strategy: "Automated"
+        });
+      }
+
+      // Step 6: Query daily metrics for timeseries chart
+      let timeseriesData = [];
+      try {
+        const dailyQuery = `
+          SELECT 
+            segments.date,
+            metrics.impressions, 
+            metrics.clicks, 
+            metrics.cost_micros, 
+            metrics.conversions
+          FROM customer
+          WHERE segments.date DURING LAST_30_DAYS
+          ORDER BY segments.date ASC
+        `;
+        const { res: dailyRes } = await fetchGoogleAdsWithVersionFallback(`customers/${customerId}/googleAds:search`, {
+          method: "POST",
+          headers: googleAdsHeaders,
+          body: JSON.stringify({ query: dailyQuery, pageSize: 100 })
+        });
+        if (dailyRes && dailyRes.ok) {
+          const dData = await dailyRes.json();
+          const dRows = dData.results || [];
+          timeseriesData = dRows.map(r => {
+            const m = r.metrics || {};
+            const dCost = +(parseInt(m.costMicros || 0, 10) / 1000000).toFixed(2);
+            return {
+              date: r.segments?.date || '',
+              clicks: parseInt(m.clicks || 0, 10),
+              impressions: parseInt(m.impressions || 0, 10),
+              cost: dCost,
+              conversions: parseFloat(m.conversions || 0)
+            };
           });
         }
+      } catch (err) {
+        console.warn("Timeseries query error:", err);
       }
 
       const totalCost = +(totalCostMicros / 1000000).toFixed(2);
@@ -245,6 +356,7 @@ export async function onRequest(context) {
         customer_id: customerId,
         accessible_customers: accessibleCustomers,
         campaigns: campaignsList,
+        timeseries: timeseriesData,
         summary: {
           cost: { value: totalCost, formatted: `$${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, change_pct: 0 },
           impressions: { value: totalImpressions, formatted: totalImpressions.toLocaleString(), change_pct: 0 },

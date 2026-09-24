@@ -44,8 +44,11 @@ export default function App() {
     }
   });
 
-  // Customer ID input state
+  // Customer ID and token input state
   const [customerIdInput, setCustomerIdInput] = useState(user?.customer_id || '');
+  const [devTokenInput, setDevTokenInput] = useState(() => localStorage.getItem('google_ads_dev_token') || '');
+  const [loginCidInput, setLoginCidInput] = useState(() => localStorage.getItem('google_ads_login_cid') || '');
+  const [accessibleAccounts, setAccessibleAccounts] = useState([]);
   const [apiNotice, setApiNotice] = useState(null);
 
   // Dashboard Data State
@@ -60,23 +63,35 @@ export default function App() {
   const [secondaryMetric, setSecondaryMetric] = useState('impressions');
 
   // Load Data
-  const loadData = async (currentUser = user, explicitCid = customerIdInput) => {
+  const loadData = async (
+    currentUser = user, 
+    explicitCid = customerIdInput,
+    explicitDevToken = devTokenInput,
+    explicitLoginCid = loginCidInput
+  ) => {
     setLoading(true);
     setApiNotice(null);
     try {
       if (currentUser?.is_live && currentUser?.access_token) {
         // Fetch live from Google Ads API via Cloudflare Pages Function
-        const devToken = localStorage.getItem('google_ads_dev_token') || '';
         const cidToUse = (explicitCid !== undefined && explicitCid !== '') ? explicitCid : (currentUser.customer_id || '');
-        const res = await syncGoogleAdsWithEdge(currentUser.access_token, cidToUse, devToken);
+        const res = await syncGoogleAdsWithEdge(
+          currentUser.access_token, 
+          cidToUse, 
+          explicitDevToken, 
+          explicitLoginCid
+        );
         if (res) {
+          if (res.accessible_customers && res.accessible_customers.length > 0) {
+            setAccessibleAccounts(res.accessible_customers);
+          }
           if (res.customer_id) {
             setCustomerIdInput(res.customer_id);
             setUser(prev => ({ ...prev, customer_id: res.customer_id }));
           }
           if (res.campaigns) setCampaigns(res.campaigns);
           if (res.summary) setSummary(res.summary);
-          if (res.timeseries) setTimeseries(res.timeseries);
+          if (res.timeseries && res.timeseries.length > 0) setTimeseries(res.timeseries);
           if (res.message) {
             setApiNotice({ type: 'info', text: res.message });
           } else if (res.error) {
@@ -253,27 +268,65 @@ export default function App() {
           <div className="space-y-2">
             <div className="p-3.5 rounded-xl bg-[#221230] border border-[#3D1F57] flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex flex-wrap items-center gap-3">
+                {/* Customer ID */}
                 <div className="flex items-center space-x-2">
                   <span className="text-[#B8A6CC] font-medium">Customer ID:</span>
-                  <input
-                    type="text"
-                    placeholder="e.g. 123-456-7890"
-                    value={customerIdInput}
-                    onChange={(e) => setCustomerIdInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') loadData(user, customerIdInput);
-                    }}
-                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36 font-mono"
-                  />
+                  {accessibleAccounts.length > 0 ? (
+                    <select
+                      value={customerIdInput}
+                      onChange={(e) => {
+                        setCustomerIdInput(e.target.value);
+                        loadData(user, e.target.value, devTokenInput, loginCidInput);
+                      }}
+                      className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none font-mono"
+                    >
+                      {accessibleAccounts.map(id => (
+                        <option key={id} value={id}>CID: {id}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. 123-456-7890"
+                      value={customerIdInput}
+                      onChange={(e) => setCustomerIdInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') loadData(user, customerIdInput, devTokenInput, loginCidInput);
+                      }}
+                      className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36 font-mono"
+                    />
+                  )}
                 </div>
+
+                {/* Developer Token */}
                 <div className="flex items-center space-x-2">
-                  <span className="text-[#B8A6CC] font-medium">Developer Token:</span>
+                  <span className="text-[#B8A6CC] font-medium">Dev Token:</span>
                   <input
                     type="password"
-                    placeholder="Optional MCC Token"
-                    defaultValue={localStorage.getItem('google_ads_dev_token') || ''}
-                    onChange={(e) => localStorage.setItem('google_ads_dev_token', e.target.value.trim())}
+                    placeholder="From MCC API Center"
+                    value={devTokenInput}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setDevTokenInput(val);
+                      localStorage.setItem('google_ads_dev_token', val);
+                    }}
                     className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-44 font-mono"
+                  />
+                </div>
+
+                {/* Manager / MCC Customer ID (Optional) */}
+                <div className="flex items-center space-x-2">
+                  <span className="text-[#B8A6CC] font-medium">Manager CID (Opt):</span>
+                  <input
+                    type="text"
+                    placeholder="MCC ID if managed"
+                    value={loginCidInput}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setLoginCidInput(val);
+                      localStorage.setItem('google_ads_login_cid', val);
+                    }}
+                    className="bg-[#160B21] border border-[#3D1F57] focus:border-[#FFF880] rounded-lg px-2.5 py-1 text-white text-xs outline-none w-36 font-mono"
                   />
                 </div>
               </div>
@@ -289,7 +342,7 @@ export default function App() {
                   </button>
                 )}
                 <button
-                  onClick={() => loadData(user, customerIdInput)}
+                  onClick={() => loadData(user, customerIdInput, devTokenInput, loginCidInput)}
                   disabled={loading}
                   className="px-3.5 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition cursor-pointer flex items-center space-x-1.5 shadow-[0_0_10px_rgba(255,248,128,0.2)]"
                 >
@@ -301,7 +354,7 @@ export default function App() {
 
             {/* API Notice / Error Banner */}
             {apiNotice && (
-              <div className={`p-3 rounded-xl border text-xs flex items-start space-x-2.5 ${
+              <div className={`p-4 rounded-xl border text-xs flex items-start space-x-3 ${
                 apiNotice.type === 'error'
                   ? 'bg-rose-950/60 border-rose-800 text-rose-200'
                   : apiNotice.type === 'warning'
@@ -309,22 +362,53 @@ export default function App() {
                   : 'bg-[#221230] border-[#3D1F57] text-[#B8A6CC]'
               }`}>
                 {apiNotice.type === 'error' ? (
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-400" />
                 ) : apiNotice.type === 'warning' ? (
-                  <Info className="w-4 h-4 shrink-0 mt-0.5 text-[#FFF880]" />
+                  <Info className="w-5 h-5 shrink-0 mt-0.5 text-[#FFF880]" />
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                  <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
                 )}
-                <div className="flex-1">
-                  <p className="font-semibold text-white">
+                <div className="flex-1 space-y-1.5">
+                  <p className="font-semibold text-white text-sm">
                     {apiNotice.type === 'error' ? 'Google Ads API Status' : 'Account Notice'}
                   </p>
-                  <p className="text-[11px] mt-0.5 leading-relaxed">{apiNotice.text}</p>
+                  <p className="text-xs leading-relaxed text-gray-200">{apiNotice.text}</p>
+                  
+                  {/* Actionable button if Google Ads API needs to be enabled */}
+                  {apiNotice.text && (apiNotice.text.includes('not enabled') || apiNotice.text.includes('Google Cloud project') || apiNotice.text.includes('Library')) && (
+                    <div className="pt-1">
+                      <a
+                        href="https://console.cloud.google.com/apis/library/googleads.googleapis.com?project=core-period-509604-u4"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#FFF880] hover:bg-[#FFF880]/90 text-[#160B21] font-bold rounded-lg text-xs transition shadow"
+                      >
+                        <span>Enable Google Ads API in Google Cloud Console</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Actionable guidance if Developer Token is needed */}
+                  {apiNotice.text && apiNotice.text.toLowerCase().includes('developer token') && !devTokenInput && (
+                    <div className="pt-1 text-[11px] text-amber-200/90 leading-relaxed">
+                      Tip: Google Ads API requires a developer token from a Google Ads Manager Account (MCC). If you do not have one, you can create a free manager account at{' '}
+                      <a
+                        href="https://ads.google.com/home/tools/manager-accounts/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#FFF880] underline font-medium"
+                      >
+                        Google Ads MCC
+                      </a>{' '}
+                      and copy the token from <strong>Tools &amp; Settings &gt; API Center</strong> into the <strong>Dev Token</strong> field above.
+                    </div>
+                  )}
                 </div>
                 {!user.access_token && apiNotice.type === 'warning' && (
                   <button
                     onClick={() => authorizeGoogleAds()}
-                    className="ml-2 px-2.5 py-1 bg-[#FFF880] text-[#160B21] font-bold rounded text-[11px] shrink-0 cursor-pointer"
+                    className="ml-2 px-3 py-1 bg-[#FFF880] text-[#160B21] font-bold rounded-lg text-xs shrink-0 cursor-pointer"
                   >
                     Authorize Now
                   </button>

@@ -94,7 +94,7 @@ export async function exchangeAuthCodeForTokens(code) {
   }
 }
 
-export async function syncGoogleAdsWithEdge(accessToken, customerId = '', developerToken = '') {
+export async function syncGoogleAdsWithEdge(accessToken, customerId = '', developerToken = '', loginCustomerId = '') {
   try {
     const res = await fetch(`${API_URL}/api/googleads/sync`, {
       method: "POST",
@@ -102,7 +102,8 @@ export async function syncGoogleAdsWithEdge(accessToken, customerId = '', develo
       body: JSON.stringify({
         access_token: accessToken,
         customer_id: customerId,
-        developer_token: developerToken
+        developer_token: developerToken,
+        login_customer_id: loginCustomerId
       })
     });
     return await res.json();
