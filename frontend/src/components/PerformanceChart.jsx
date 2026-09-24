@@ -6,18 +6,16 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
-  Legend
+  CartesianGrid
 } from 'recharts';
-import { ChevronDown, BarChart2 } from 'lucide-react';
 
 const METRIC_OPTIONS = [
-  { value: 'clicks', label: 'Clicks', unit: '', prefix: '' },
-  { value: 'impressions', label: 'Impressions', unit: '', prefix: '' },
-  { value: 'cost', label: 'Cost', unit: '', prefix: '$' },
-  { value: 'conversions', label: 'Conversions', unit: '', prefix: '' },
-  { value: 'cost_per_conv', label: 'Cost / conv.', unit: '', prefix: '$' },
-  { value: 'ctr', label: 'CTR', unit: '%', prefix: '' },
+  { value: 'clicks', label: 'Clicks', prefix: '', unit: '' },
+  { value: 'impressions', label: 'Impressions', prefix: '', unit: '' },
+  { value: 'cost', label: 'Spend ($)', prefix: '$', unit: '' },
+  { value: 'conversions', label: 'Conversions', prefix: '', unit: '' },
+  { value: 'ctr', label: 'CTR (%)', prefix: '', unit: '%' },
+  { value: 'avg_cpc', label: 'Avg CPC', prefix: '$', unit: '' },
 ];
 
 export default function PerformanceChart({
@@ -44,15 +42,15 @@ export default function PerformanceChart({
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border border-[#dadce0] rounded-lg shadow-lg text-xs space-y-1 z-50">
-          <p className="font-semibold text-gray-800 pb-1 border-b border-gray-100">{label}</p>
+        <div className="bg-[#160B21] p-3 border border-[#3D1F57] rounded-xl shadow-xl text-xs space-y-1.5 z-50">
+          <p className="font-semibold text-[#FFF880] pb-1 border-b border-[#3D1F57]">{label}</p>
           {payload.map((entry, index) => (
             <div key={`tooltip-${index}`} className="flex items-center justify-between space-x-4">
               <span className="flex items-center space-x-1.5" style={{ color: entry.color }}>
-                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: entry.color }} />
-                <span className="font-medium text-gray-700">{entry.name}:</span>
+                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color }} />
+                <span className="font-medium text-[#B8A6CC]">{entry.name}:</span>
               </span>
-              <span className="font-bold text-gray-900">
+              <span className="font-bold text-white">
                 {entry.name === primaryMeta.label
                   ? formatValue(entry.value, primaryMeta)
                   : formatValue(entry.value, secondaryMeta)}
@@ -66,39 +64,39 @@ export default function PerformanceChart({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-[#dadce0] p-4 mb-6 shadow-sm">
-      {/* Top Chart Header / Metric Selectors */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#dadce0] mb-4">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-          {/* Primary Metric Dropdown */}
-          <div className="flex items-center space-x-2 bg-blue-50/70 border border-blue-200 px-3 py-1.5 rounded-md">
-            <span className="w-3 h-3 rounded-full bg-[#1a73e8]"></span>
+    <div className="bg-[#221230] rounded-2xl border border-[#3D1F57] p-5 mb-6 shadow-sm">
+      {/* Header Selectors */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#3D1F57] mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Primary Metric (Fraoula Yellow) */}
+          <div className="flex items-center space-x-2 bg-[#160B21] border border-[#FFF880]/30 px-3 py-1.5 rounded-lg">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FFF880] shadow-[0_0_6px_#FFF880]"></span>
             <select
               value={primaryMetric}
               onChange={(e) => setPrimaryMetric(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#1a73e8] focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-[#FFF880] focus:outline-none cursor-pointer"
             >
               {METRIC_OPTIONS.map((opt) => (
-                <option key={`p-${opt.value}`} value={opt.value}>
+                <option key={`p-${opt.value}`} value={opt.value} className="bg-[#160B21] text-white">
                   {opt.label}
                 </option>
               ))}
             </select>
           </div>
 
-          <span className="text-[#5f6368] text-xs font-medium">vs</span>
+          <span className="text-[#B8A6CC] text-xs">vs</span>
 
-          {/* Secondary Metric Dropdown */}
-          <div className="flex items-center space-x-2 bg-red-50/70 border border-red-200 px-3 py-1.5 rounded-md">
-            <span className="w-3 h-3 rounded-full bg-[#ea4335]"></span>
+          {/* Secondary Metric (Violet) */}
+          <div className="flex items-center space-x-2 bg-[#160B21] border border-[#9D4EDD]/40 px-3 py-1.5 rounded-lg">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#9D4EDD] shadow-[0_0_6px_#9D4EDD]"></span>
             <select
               value={secondaryMetric}
               onChange={(e) => setSecondaryMetric(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-[#ea4335] focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-[#9D4EDD] focus:outline-none cursor-pointer"
             >
-              <option value="none">None</option>
+              <option value="none" className="bg-[#160B21] text-white">None</option>
               {METRIC_OPTIONS.map((opt) => (
-                <option key={`s-${opt.value}`} value={opt.value}>
+                <option key={`s-${opt.value}`} value={opt.value} className="bg-[#160B21] text-white">
                   {opt.label}
                 </option>
               ))}
@@ -106,29 +104,26 @@ export default function PerformanceChart({
           </div>
         </div>
 
-        {/* Chart View Toggle / Granularity */}
-        <div className="flex items-center space-x-1 text-xs text-[#5f6368]">
-          <span className="px-2.5 py-1 bg-[#e8f0fe] text-[#1a73e8] font-medium rounded">Daily</span>
-          <span className="px-2.5 py-1 hover:bg-gray-100 rounded cursor-pointer">Weekly</span>
-          <span className="px-2.5 py-1 hover:bg-gray-100 rounded cursor-pointer">Monthly</span>
+        <div className="text-xs text-[#B8A6CC] font-medium">
+          Reporting Cycle: <span className="text-white">Daily Performance</span>
         </div>
       </div>
 
-      {/* Main Chart SVG / Recharts Canvas */}
+      {/* Chart Canvas */}
       <div className="h-64 sm:h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f3f4" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3D1F57" opacity={0.6} />
             <XAxis 
               dataKey="date" 
-              tick={{ fontSize: 11, fill: '#5f6368' }} 
-              axisLine={{ stroke: '#dadce0' }}
+              tick={{ fontSize: 11, fill: '#B8A6CC' }} 
+              axisLine={{ stroke: '#3D1F57' }}
               tickLine={false}
             />
-            {/* Primary Y Axis (Left) */}
+            {/* Primary Y Axis (Left - Fraoula Yellow) */}
             <YAxis
               yAxisId="left"
-              tick={{ fontSize: 11, fill: '#1a73e8' }}
+              tick={{ fontSize: 11, fill: '#FFF880' }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => {
@@ -136,12 +131,12 @@ export default function PerformanceChart({
                 return v;
               }}
             />
-            {/* Secondary Y Axis (Right) */}
+            {/* Secondary Y Axis (Right - Violet) */}
             {secondaryMetric !== 'none' && (
               <YAxis
                 yAxisId="right"
                 orientation="right"
-                tick={{ fontSize: 11, fill: '#ea4335' }}
+                tick={{ fontSize: 11, fill: '#9D4EDD' }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => {
@@ -152,30 +147,30 @@ export default function PerformanceChart({
             )}
             <Tooltip content={<CustomTooltip />} />
             
-            {/* Primary Line */}
+            {/* Primary Line - Fraoula Yellow */}
             <Line
               yAxisId="left"
               type="monotone"
               dataKey={primaryMetric}
               name={primaryMeta.label}
-              stroke="#1a73e8"
+              stroke="#FFF880"
               strokeWidth={2.5}
-              dot={{ r: 2, fill: '#1a73e8' }}
-              activeDot={{ r: 5, fill: '#1a73e8' }}
+              dot={{ r: 2, fill: '#FFF880' }}
+              activeDot={{ r: 5, fill: '#FFF880', stroke: '#160B21', strokeWidth: 2 }}
             />
 
-            {/* Secondary Line */}
+            {/* Secondary Line - Violet */}
             {secondaryMetric !== 'none' && (
               <Line
                 yAxisId="right"
                 type="monotone"
                 dataKey={secondaryMetric}
                 name={secondaryMeta.label}
-                stroke="#ea4335"
+                stroke="#9D4EDD"
                 strokeWidth={2}
                 strokeDasharray="4 4"
-                dot={{ r: 2, fill: '#ea4335' }}
-                activeDot={{ r: 4, fill: '#ea4335' }}
+                dot={{ r: 2, fill: '#9D4EDD' }}
+                activeDot={{ r: 5, fill: '#9D4EDD', stroke: '#160B21', strokeWidth: 2 }}
               />
             )}
           </LineChart>

@@ -1,27 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen, Ubuntu, Cantarell, sans-serif;
-  color: #202124;
-  background-color: #f8f9fa;
+  /* Fraoula Signature Colors: Deep Plum & Electric Yellow */
+  --fraoula-canvas: #160B21;
+  --fraoula-surface: #221230;
+  --fraoula-surface-hover: #2D1840;
+  --fraoula-border: #3D1F57;
+  --fraoula-yellow: #FFF880;
+  --fraoula-yellow-muted: #D9D266;
+  --fraoula-text: #FFFFFF;
+  --fraoula-muted: #B8A6CC;
+  --fraoula-plum: #3D1B4F;
+  --fraoula-purple: #9D4EDD;
+
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #FFFFFF;
+  background-color: #160B21;
 }
 
-/* Custom scrollbars for clean Google UI feel */
+body {
+  background-color: #160B21;
+  color: #FFFFFF;
+  min-height: 100vh;
+}
+
+/* Custom Fraoula scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f3f4;
+  background: #160B21;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #dadce0;
+  background: #3D1F57;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #bdc1c6;
+  background: #FFF880;
 }
